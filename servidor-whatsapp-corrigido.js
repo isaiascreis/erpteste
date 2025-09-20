@@ -28,7 +28,7 @@ ffmpeg.setFfprobePath(ffprobeStatic.path);
 // 🚀 CONFIGURAÇÃO DO WEBHOOK ERP (CORRIGIDA)
 // =====================================================================
 const ERP_WEBHOOK_URL = process.env.ERP_WEBHOOK_URL || 'https://erpteste.onrender.com/api/whatsapp/webhook';
-const ERP_WEBHOOK_TOKEN = process.env.ERP_WEBHOOK_TOKEN || 'mondial-webhook-secret';
+const ERP_WEBHOOK_TOKEN = process.env.ERP_WEBHOOK_TOKEN || 'mundial-webhook-token-2025';
 
 console.log('🔗 Configurações do Webhook ERP:');
 console.log('📡 URL:', ERP_WEBHOOK_URL);
