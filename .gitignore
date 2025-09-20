@@ -1,0 +1,11 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+attached_assets/
+serviceAccountKey*.json
+firebase-adminsdk*.json
+.env
+.env.local
