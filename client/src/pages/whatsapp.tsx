@@ -32,12 +32,16 @@ export default function WhatsApp() {
       const status = typeof data.status === 'string' ? data.status.toLowerCase() : 'offline';
       const isReady = data.ready === true;
       
-      if (status === 'conectado' || isReady) {
+      console.log('WhatsApp server status:', data.status); // Debug log
+      
+      if (status === 'conectado' || status.includes('conectado') || isReady) {
         setConnectionStatus("connected");
         setQrCodeUrl(null);
-      } else {
+      } else if (status.includes('aguardando') || status.includes('qr code')) {
         setConnectionStatus("disconnected");
         await fetchQRCode();
+      } else {
+        setConnectionStatus("offline");
       }
     } catch (error) {
       console.warn('WhatsApp status check failed:', error);
@@ -63,8 +67,15 @@ export default function WhatsApp() {
       
       if (response.ok) {
         const data = await response.json();
-        if (data.qr) {
-          setQrCodeUrl(data.qr);
+        if (data.qrCode) {
+          setQrCodeUrl(data.qrCode);
+          // Atualizar status se disponível na resposta
+          if (data.status) {
+            const status = data.status.toLowerCase();
+            if (status.includes('aguardando') || status.includes('qr code')) {
+              setConnectionStatus("disconnected");
+            }
+          }
         }
       }
     } catch (error) {
@@ -186,7 +197,9 @@ export default function WhatsApp() {
             <div className="text-center py-8">
               <QrCode className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2" data-testid="text-whatsapp-status">
-                Status: {connectionStatus === "connected" ? "Conectado" : "Desconectado"}
+                Status: {connectionStatus === "connected" ? "Conectado" : 
+                        connectionStatus === "offline" ? "Servidor Offline" :
+                        qrCodeUrl ? "Aguardando escaneamento do QR Code" : "Desconectado"}
               </h3>
               {connectionStatus !== "connected" && (
                 <div className="space-y-4">
