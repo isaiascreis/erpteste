@@ -4,9 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { 
   MessageSquare, 
   Search, 
@@ -19,7 +24,9 @@ import {
   Video,
   MoreVertical,
   User,
-  Loader2
+  Loader2,
+  Plus,
+  UserPlus
 } from "lucide-react";
 
 interface Message {
@@ -49,6 +56,17 @@ interface Conversation {
   unreadCount?: number;
 }
 
+// Schema para novo contato
+const newContactSchema = z.object({
+  phone: z.string()
+    .min(10, "Número deve ter pelo menos 10 dígitos")
+    .regex(/^[0-9+\s\-()]+$/, "Formato de telefone inválido"),
+  name: z.string().min(1, "Nome é obrigatório"),
+  message: z.string().min(1, "Mensagem inicial é obrigatória"),
+});
+
+type NewContactFormData = z.infer<typeof newContactSchema>;
+
 export function ChatInterface() {
   const { toast } = useToast();
 
@@ -63,8 +81,19 @@ export function ChatInterface() {
   const [newMessage, setNewMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [showNewContactForm, setShowNewContactForm] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Form para novo contato
+  const newContactForm = useForm<NewContactFormData>({
+    resolver: zodResolver(newContactSchema),
+    defaultValues: {
+      phone: "",
+      name: "",
+      message: "",
+    },
+  });
 
   // Buscar mensagens da conversa selecionada com polling automático
   const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
@@ -77,17 +106,11 @@ export function ChatInterface() {
   // Mutation para enviar mensagem
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { conversationId: number; content: string }) => {
-      const response = await fetch('/api/whatsapp/send-message', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+      const response = await apiRequest('POST', '/api/whatsapp/send', {
+        phone: selectedConversation?.phone,
+        message: data.content,
       });
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
-      return response.json();
+      return response;
     },
     onSuccess: () => {
       setNewMessage('');
@@ -106,6 +129,57 @@ export function ChatInterface() {
         variant: "destructive",
       });
       console.error('Erro ao enviar mensagem:', error);
+    },
+  });
+
+  // Mutation para criar nova conversa e enviar primeira mensagem
+  const createConversationMutation = useMutation({
+    mutationFn: async (data: NewContactFormData) => {
+      // Primeiro cria ou busca a conversa
+      const conversation = await apiRequest('POST', '/api/whatsapp/conversations', {
+        phone: data.phone,
+        name: data.name,
+      });
+      
+      try {
+        // Tenta enviar a mensagem
+        await apiRequest('POST', '/api/whatsapp/send', {
+          phone: data.phone,
+          message: data.message,
+        });
+        return { conversation, messageSent: true };
+      } catch (error) {
+        // Se falhar o envio, retorna a conversa mas indica falha na mensagem
+        console.warn('Falha ao enviar mensagem inicial:', error);
+        return { conversation, messageSent: false };
+      }
+    },
+    onSuccess: (result) => {
+      if (result.messageSent) {
+        toast({
+          title: "Conversa criada",
+          description: "Nova conversa criada e mensagem enviada com sucesso.",
+        });
+      } else {
+        toast({
+          title: "Conversa criada com aviso",
+          description: "Conversa criada, mas houve problema no envio da mensagem. O servidor WhatsApp pode estar indisponível.",
+          variant: "destructive",
+        });
+      }
+      setShowNewContactForm(false);
+      newContactForm.reset();
+      setSelectedConversation(result.conversation);
+      // Invalidar queries para recarregar dados
+      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao criar conversa",
+        description: "Não foi possível criar a conversa. Verifique o número e tente novamente.",
+        variant: "destructive",
+      });
+      console.error('Erro ao criar conversa:', error);
     },
   });
 
@@ -160,6 +234,10 @@ export function ChatInterface() {
     // In a real implementation, you would start/stop audio recording here
   };
 
+  const handleCreateContact = (data: NewContactFormData) => {
+    createConversationMutation.mutate(data);
+  };
+
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleTimeString('pt-BR', { 
@@ -185,7 +263,9 @@ export function ChatInterface() {
   };
 
   // Função para formatear telefone de forma legível
-  const formatPhone = (phone: string) => {
+  const formatPhone = (phone: string | undefined | null) => {
+    if (!phone) return 'Número não disponível';
+    
     // Remove @c.us se presente
     const cleanPhone = phone.replace('@c.us', '');
     // Adiciona formatação brasileira se for número brasileiro
@@ -206,13 +286,119 @@ export function ChatInterface() {
         <div className="p-4 border-b border-border" data-testid="sidebar-header">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-foreground">Conversas</h3>
-            <Badge className="bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
-              {conversationsLoading ? (
-                <Loader2 className="w-3 h-3 animate-spin mr-1" />
-              ) : (
-                `${unreadCount} não lidas`
-              )}
-            </Badge>
+            <div className="flex items-center space-x-2">
+              <Badge className="bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
+                {conversationsLoading ? (
+                  <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                ) : (
+                  `${unreadCount} não lidas`
+                )}
+              </Badge>
+              
+              <Dialog open={showNewContactForm} onOpenChange={setShowNewContactForm}>
+                <DialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-8 p-0"
+                    data-testid="button-new-conversation"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Nova Conversa</DialogTitle>
+                    <DialogDescription>
+                      Adicione um novo contato e envie uma mensagem inicial.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Form {...newContactForm}>
+                    <form onSubmit={newContactForm.handleSubmit(handleCreateContact)} className="space-y-4">
+                      <FormField
+                        control={newContactForm.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Número do WhatsApp</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                placeholder="Ex: +5511999999999 ou 11999999999"
+                                data-testid="input-new-phone"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={newContactForm.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nome do Contato</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                placeholder="Ex: João Silva"
+                                data-testid="input-new-name"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={newContactForm.control}
+                        name="message"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Mensagem Inicial</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                {...field}
+                                placeholder="Digite a primeira mensagem que será enviada..."
+                                rows={3}
+                                data-testid="input-new-message"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="flex justify-end space-x-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setShowNewContactForm(false)}
+                          data-testid="button-cancel-new-conversation"
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="submit"
+                          disabled={createConversationMutation.isPending}
+                          data-testid="button-create-conversation"
+                        >
+                          {createConversationMutation.isPending ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              Criando...
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-4 h-4 mr-2" />
+                              Criar e Enviar
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
