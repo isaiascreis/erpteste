@@ -19,20 +19,32 @@ export default function WhatsApp() {
   const checkWhatsAppStatus = async () => {
     try {
       setIsChecking(true);
+      
+      // Adicionar timeout e retry para melhor confiabilidade
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos timeout
+      
       const response = await fetch(`${WHATSAPP_SERVER_URL}/status`, { 
         cache: 'no-store',
-        method: 'GET'
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
       });
       
+      clearTimeout(timeoutId);
+      
       if (!response.ok) {
-        throw new Error('Server not responding');
+        throw new Error(`Server responded with ${response.status}`);
       }
       
       const data = await response.json();
       const status = typeof data.status === 'string' ? data.status.toLowerCase() : 'offline';
       const isReady = data.ready === true;
       
-      console.log('WhatsApp server status:', data.status); // Debug log
+      console.log('WhatsApp server status:', data.status);
       
       if (status === 'conectado' || status.includes('conectado') || isReady) {
         setConnectionStatus("connected");
@@ -41,17 +53,26 @@ export default function WhatsApp() {
         setConnectionStatus("disconnected");
         await fetchQRCode();
       } else {
-        setConnectionStatus("offline");
+        setConnectionStatus("disconnected");
+        await fetchQRCode();
       }
-    } catch (error) {
-      console.warn('WhatsApp status check failed:', error);
-      setConnectionStatus("offline");
-      setQrCodeUrl(null);
-      toast({
-        title: "Servidor WhatsApp indisponível",
-        description: "Verifique se o servidor está rodando",
-        variant: "destructive"
-      });
+    } catch (error: any) {
+      console.warn('WhatsApp status check failed:', error?.name || error?.message);
+      
+      // Não mostrar toast a cada falha para evitar spam
+      if (error?.name !== 'AbortError') {
+        setConnectionStatus("offline");
+        setQrCodeUrl(null);
+      }
+      
+      // Só mostrar toast se for uma falha persistente (não timeout)
+      if (error?.message && !error?.message.includes('fetch') && error?.name !== 'AbortError') {
+        toast({
+          title: "Servidor WhatsApp temporariamente indisponível",
+          description: "Tentando reconectar automaticamente...",
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsChecking(false);
     }
@@ -60,15 +81,27 @@ export default function WhatsApp() {
   // Função para buscar QR Code
   const fetchQRCode = async () => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos timeout
+      
       const response = await fetch(`${WHATSAPP_SERVER_URL}/qr`, { 
         cache: 'no-store',
-        method: 'GET'
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
       });
+      
+      clearTimeout(timeoutId);
       
       if (response.ok) {
         const data = await response.json();
         if (data.qrCode) {
           setQrCodeUrl(data.qrCode);
+          console.log('QR Code atualizado com sucesso');
+          
           // Atualizar status se disponível na resposta
           if (data.status) {
             const status = data.status.toLowerCase();
@@ -77,16 +110,20 @@ export default function WhatsApp() {
             }
           }
         }
+      } else {
+        console.warn('QR endpoint returned:', response.status);
       }
-    } catch (error) {
-      console.warn('Failed to fetch QR code:', error);
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') {
+        console.warn('Failed to fetch QR code:', error?.name || error?.message);
+      }
     }
   };
 
   // Polling para verificar status periodicamente
   useEffect(() => {
     checkWhatsAppStatus();
-    const interval = setInterval(checkWhatsAppStatus, 5000); // Verifica a cada 5 segundos
+    const interval = setInterval(checkWhatsAppStatus, 10000); // Verifica a cada 10 segundos (reduzido para evitar sobrecarga)
     
     return () => clearInterval(interval);
   }, []);
