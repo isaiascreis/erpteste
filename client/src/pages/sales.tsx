@@ -9,16 +9,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { SaleForm } from "@/components/sales/sale-form";
 import { Plus, Search, Eye, Edit, Trash2, Filter } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Sales() {
   const [showForm, setShowForm] = useState(false);
   const [selectedSale, setSelectedSale] = useState<any>(null);
+  const [loadingEditSale, setLoadingEditSale] = useState(false);
   const [filters, setFilters] = useState({
     status: "",
     search: "",
     dateFrom: "",
     dateTo: "",
   });
+
+  const { toast } = useToast();
 
   const { data: sales, isLoading } = useQuery({
     queryKey: ["/api/sales"],
@@ -43,9 +47,31 @@ export default function Sales() {
     setShowForm(true);
   };
 
-  const handleEditSale = (sale: any) => {
-    setSelectedSale(sale);
-    setShowForm(true);
+  const handleEditSale = async (sale: any) => {
+    setLoadingEditSale(true);
+    try {
+      // Fetch complete sale data including related records
+      const response = await fetch(`/api/sales/${sale.id}`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch sale details');
+      }
+      
+      const completeSaleData = await response.json();
+      setSelectedSale(completeSaleData);
+      setShowForm(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao carregar venda",
+        description: "Não foi possível carregar os detalhes da venda.",
+        variant: "destructive",
+      });
+      console.error('Error fetching sale details:', error);
+    } finally {
+      setLoadingEditSale(false);
+    }
   };
 
   const handleFormClose = () => {
@@ -201,6 +227,7 @@ export default function Sales() {
                             size="sm" 
                             variant="ghost" 
                             onClick={() => handleEditSale(sale)}
+                            disabled={loadingEditSale}
                             data-testid={`button-edit-${sale.id}`}
                           >
                             <Edit className="w-4 h-4" />

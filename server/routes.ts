@@ -5,6 +5,18 @@ import { setupSimpleAuth, isAuthenticated } from "./simpleAuth";
 import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema } from "@shared/schema";
 import { z } from "zod";
 
+// Transfer validation schema
+const transferBankAccountSchema = z.object({
+  contaOrigemId: z.coerce.number().positive("ID da conta de origem deve ser um número positivo"),
+  contaDestinoId: z.coerce.number().positive("ID da conta de destino deve ser um número positivo"),
+  valor: z.coerce.number().positive("Valor deve ser maior que zero"),
+  descricao: z.string().min(1, "Descrição é obrigatória"),
+  observacoes: z.string().optional(),
+}).refine((data) => data.contaOrigemId !== data.contaDestinoId, {
+  message: "Conta de origem deve ser diferente da conta de destino",
+  path: ["contaDestinoId"],
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupSimpleAuth(app);
@@ -24,6 +36,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       next();
     } catch (error) {
       console.error("Error in requireAdmin middleware:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  };
+
+  // Authorization middleware for financial operations
+  const requireFinancial = async (req: any, res: any, next: any) => {
+    try {
+      if (!req.user?.id) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = await storage.getUser(req.user.id);
+      if (!user || (user.systemRole !== 'admin' && user.systemRole !== 'supervisor')) {
+        return res.status(403).json({ message: "Acesso negado. Apenas administradores e supervisores podem realizar operações financeiras." });
+      }
+      
+      next();
+    } catch (error) {
+      console.error("Error in requireFinancial middleware:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
   };
@@ -380,12 +411,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/bank-accounts', isAuthenticated, async (req, res) => {
     try {
+      console.log("POST /api/bank-accounts - Request body:", JSON.stringify(req.body, null, 2));
       const accountData = insertBankAccountSchema.parse(req.body);
+      console.log("POST /api/bank-accounts - Parsed account data:", JSON.stringify(accountData, null, 2));
       const account = await storage.createBankAccount(accountData);
+      console.log("POST /api/bank-accounts - Created account:", JSON.stringify(account, null, 2));
       res.json(account);
     } catch (error) {
       console.error("Error creating bank account:", error);
-      res.status(500).json({ message: "Failed to create bank account" });
+      if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      }
+      res.status(500).json({ message: "Failed to create bank account", error: error.message });
     }
   });
 
@@ -412,6 +450,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating bank transaction:", error);
       res.status(500).json({ message: "Failed to create bank transaction" });
+    }
+  });
+
+  app.post('/api/bank-accounts/transfer', isAuthenticated, requireFinancial, async (req, res) => {
+    try {
+      // Validação com Zod schema
+      const validatedData = transferBankAccountSchema.parse(req.body);
+
+      const result = await storage.transferBetweenBankAccounts({
+        contaOrigemId: validatedData.contaOrigemId,
+        contaDestinoId: validatedData.contaDestinoId,
+        valor: validatedData.valor,
+        descricao: validatedData.descricao,
+        observacoes: validatedData.observacoes,
+      });
+
+      res.json({
+        message: "Transferência realizada com sucesso",
+        transacaoSaida: result.transacaoSaida,
+        transacaoEntrada: result.transacaoEntrada,
+        saldosAtualizados: {
+          contaOrigem: result.contaOrigem,
+          contaDestino: result.contaDestino,
+        }
+      });
+    } catch (error) {
+      console.error("Error transferring between bank accounts:", error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Dados inválidos",
+          errors: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
+        });
+      }
+      
+      // Handle domain/business logic errors with 422 status
+      if (error instanceof Error) {
+        const errorMessage = error.message;
+        
+        if (errorMessage.includes('Saldo insuficiente') || 
+            errorMessage.includes('não encontrada') ||
+            errorMessage.includes('deve ser maior que zero')) {
+          return res.status(422).json({
+            message: "Erro de validação de negócio",
+            error: errorMessage,
+            field: errorMessage.includes('Saldo insuficiente') ? 'valor' : 
+                   errorMessage.includes('origem não encontrada') ? 'contaOrigemId' :
+                   errorMessage.includes('destino não encontrada') ? 'contaDestinoId' : 'valor'
+          });
+        }
+      }
+      
+      res.status(500).json({ 
+        message: "Falha na transferência",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
     }
   });
 

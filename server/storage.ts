@@ -51,7 +51,7 @@ import {
   type InsertWhatsappMessage,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, ilike, and, gte, lte, sql, desc, asc } from "drizzle-orm";
+import { eq, ilike, and, gte, lte, sql, desc, asc, or } from "drizzle-orm";
 
 // Interface for storage operations
 export interface IStorage {
@@ -103,6 +103,18 @@ export interface IStorage {
   createBankAccount(account: InsertBankAccount): Promise<BankAccount>;
   getBankTransactions(accountId: number, filters: { dateFrom?: string; dateTo?: string }): Promise<any[]>;
   createBankTransaction(transaction: InsertBankTransaction): Promise<BankTransaction>;
+  transferBetweenBankAccounts(transferData: {
+    contaOrigemId: number;
+    contaDestinoId: number;
+    valor: number;
+    descricao: string;
+    observacoes?: string;
+  }): Promise<{ 
+    transacaoSaida: BankTransaction; 
+    transacaoEntrada: BankTransaction;
+    contaOrigem: { id: number; nome: string; saldo: string };
+    contaDestino: { id: number; nome: string; saldo: string };
+  }>;
 
   // Account Category operations
   getAccountCategories(tipo?: string): Promise<AccountCategory[]>;
@@ -963,6 +975,113 @@ export class DatabaseStorage implements IStorage {
         .where(eq(bankAccounts.id, transactionData.contaBancariaId));
 
       return transaction;
+    });
+  }
+
+  async transferBetweenBankAccounts(transferData: {
+    contaOrigemId: number;
+    contaDestinoId: number;
+    valor: number;
+    descricao: string;
+    observacoes?: string;
+  }): Promise<{ 
+    transacaoSaida: BankTransaction; 
+    transacaoEntrada: BankTransaction;
+    contaOrigem: { id: number; nome: string; saldo: string };
+    contaDestino: { id: number; nome: string; saldo: string };
+  }> {
+    return db.transaction(async (tx) => {
+      const valor = transferData.valor;
+      
+      if (valor <= 0) {
+        throw new Error('Valor da transferência deve ser maior que zero');
+      }
+
+      // Verificar se as contas existem e bloquear para operação atômica
+      // Ordenar IDs para evitar deadlocks
+      const minId = Math.min(transferData.contaOrigemId, transferData.contaDestinoId);
+      const maxId = Math.max(transferData.contaOrigemId, transferData.contaDestinoId);
+      
+      // Buscar e bloquear contas em ordem consistente (FOR UPDATE)
+      const contas = await tx
+        .select()
+        .from(bankAccounts)
+        .where(or(eq(bankAccounts.id, minId), eq(bankAccounts.id, maxId)))
+        .for('update');
+        
+      const contaOrigem = contas.find(c => c.id === transferData.contaOrigemId);
+      const contaDestino = contas.find(c => c.id === transferData.contaDestinoId);
+
+      if (!contaOrigem) throw new Error('Conta de origem não encontrada');
+      if (!contaDestino) throw new Error('Conta de destino não encontrada');
+
+      const saldoOrigem = Number(contaOrigem.saldo);
+      
+      if (saldoOrigem < valor) {
+        throw new Error('Saldo insuficiente na conta de origem');
+      }
+
+      const dataTransacao = new Date();
+
+      // 1. Criar transação de SAÍDA na conta origem
+      const novoSaldoOrigem = saldoOrigem - valor;
+      const [transacaoSaida] = await tx.insert(bankTransactions).values({
+        contaBancariaId: transferData.contaOrigemId,
+        descricao: `Transferência para ${contaDestino.nome}: ${transferData.descricao}`,
+        valor: valor.toString(),
+        tipo: 'saida',
+        dataTransacao,
+        saldoAnterior: saldoOrigem.toString(),
+        saldoNovo: novoSaldoOrigem.toString(),
+        observacoes: transferData.observacoes,
+      }).returning();
+
+      // 2. Atualizar saldo da conta origem
+      await tx
+        .update(bankAccounts)
+        .set({
+          saldo: novoSaldoOrigem.toString(),
+          updatedAt: new Date(),
+        })
+        .where(eq(bankAccounts.id, transferData.contaOrigemId));
+
+      // 3. Criar transação de ENTRADA na conta destino
+      const saldoDestino = Number(contaDestino.saldo);
+      const novoSaldoDestino = saldoDestino + valor;
+      const [transacaoEntrada] = await tx.insert(bankTransactions).values({
+        contaBancariaId: transferData.contaDestinoId,
+        descricao: `Transferência recebida de ${contaOrigem.nome}: ${transferData.descricao}`,
+        valor: valor.toString(),
+        tipo: 'entrada',
+        dataTransacao,
+        saldoAnterior: saldoDestino.toString(),
+        saldoNovo: novoSaldoDestino.toString(),
+        observacoes: transferData.observacoes,
+      }).returning();
+
+      // 4. Atualizar saldo da conta destino
+      await tx
+        .update(bankAccounts)
+        .set({
+          saldo: novoSaldoDestino.toString(),
+          updatedAt: new Date(),
+        })
+        .where(eq(bankAccounts.id, transferData.contaDestinoId));
+
+      return { 
+        transacaoSaida, 
+        transacaoEntrada,
+        contaOrigem: {
+          id: contaOrigem.id,
+          nome: contaOrigem.nome,
+          saldo: novoSaldoOrigem.toString(),
+        },
+        contaDestino: {
+          id: contaDestino.id,
+          nome: contaDestino.nome,
+          saldo: novoSaldoDestino.toString(),
+        },
+      };
     });
   }
 

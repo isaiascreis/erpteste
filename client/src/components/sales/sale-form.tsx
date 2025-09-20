@@ -48,6 +48,10 @@ const serviceSchema = z.object({
 });
 
 const flightDetailsSchema = z.object({
+  // Direção da viagem
+  direcao: z.enum(["ida", "volta", "ida-volta"]).optional(),
+  
+  // Voos de ida (ou único voo se for só ida/volta)
   numeroVoo: z.string().optional(),
   companhiaAerea: z.string().optional(),
   origem: z.string().optional(),
@@ -55,9 +59,17 @@ const flightDetailsSchema = z.object({
   dataVoo: z.string().optional(),
   horarioPartida: z.string().optional(),
   horarioChegada: z.string().optional(),
-  direcao: z.enum(["ida", "volta", "ida-volta"]).optional(),
   classe: z.string().optional(),
   observacoes: z.string().optional(),
+  
+  // Voos de volta (apenas para ida-volta)
+  numeroVooVolta: z.string().optional(),
+  companhiaAereaVolta: z.string().optional(),
+  dataVooVolta: z.string().optional(),
+  horarioPartidaVolta: z.string().optional(),
+  horarioChegadaVolta: z.string().optional(),
+  classeVolta: z.string().optional(),
+  observacoesVolta: z.string().optional(),
 });
 
 const hotelDetailsSchema = z.object({
@@ -1112,7 +1124,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
       {/* Service Modal */}
       <Dialog open={showServiceModal} onOpenChange={setShowServiceModal}>
-        <DialogContent className="max-w-2xl" data-testid="dialog-service">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="dialog-service">
           <DialogHeader>
             <DialogTitle>
               {editingItem ? "Editar Serviço" : "Adicionar Serviço"}
@@ -1236,76 +1248,12 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
               {/* Flight Details - Show only for aereo service type */}
               {serviceForm.watch("tipo") === "aereo" && (
-                <div className="mt-6 p-4 border border-border rounded-lg bg-blue-50 dark:bg-blue-950/20">
-                  <h4 className="font-semibold text-foreground mb-4 flex items-center">
-                    ✈️ Detalhes do Voo
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={flightDetailsForm.control}
-                      name="numeroVoo"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Número do Voo</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Ex: AD1234" data-testid="input-flight-number" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={flightDetailsForm.control}
-                      name="companhiaAerea"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Companhia Aérea</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Ex: Azul, LATAM, GOL" data-testid="input-airline" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={flightDetailsForm.control}
-                      name="origem"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Origem</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Ex: São Paulo (GRU)" data-testid="input-origin" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={flightDetailsForm.control}
-                      name="destino"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Destino</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Ex: Rio de Janeiro (SDU)" data-testid="input-destination" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={flightDetailsForm.control}
-                      name="dataVoo"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Data do Voo</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} data-testid="input-flight-date" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                <div className="mt-6 space-y-6">
+                  {/* Flight Direction Selection */}
+                  <div className="p-4 border border-border rounded-lg bg-blue-50 dark:bg-blue-950/20">
+                    <h4 className="font-semibold text-foreground mb-4 flex items-center">
+                      ✈️ Tipo de Viagem
+                    </h4>
                     <FormField
                       control={flightDetailsForm.control}
                       name="direcao"
@@ -1315,12 +1263,12 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                           <Select onValueChange={field.onChange} value={field.value || ""}>
                             <FormControl>
                               <SelectTrigger data-testid="select-flight-direction">
-                                <SelectValue />
+                                <SelectValue placeholder="Selecione o tipo de viagem" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="ida">Ida</SelectItem>
-                              <SelectItem value="volta">Volta</SelectItem>
+                              <SelectItem value="ida">Somente Ida</SelectItem>
+                              <SelectItem value="volta">Somente Volta</SelectItem>
                               <SelectItem value="ida-volta">Ida e Volta</SelectItem>
                             </SelectContent>
                           </Select>
@@ -1328,59 +1276,371 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={flightDetailsForm.control}
-                      name="horarioPartida"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Horário de Partida</FormLabel>
-                          <FormControl>
-                            <Input type="time" {...field} data-testid="input-departure-time" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={flightDetailsForm.control}
-                      name="horarioChegada"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Horário de Chegada</FormLabel>
-                          <FormControl>
-                            <Input type="time" {...field} data-testid="input-arrival-time" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={flightDetailsForm.control}
-                      name="classe"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Classe</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Ex: Econômica, Executiva" data-testid="input-class" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={flightDetailsForm.control}
-                      name="observacoes"
-                      render={({ field }) => (
-                        <FormItem className="col-span-1 md:col-span-2">
-                          <FormLabel>Observações do Voo</FormLabel>
-                          <FormControl>
-                            <Textarea {...field} placeholder="Detalhes adicionais sobre o voo..." data-testid="input-flight-notes" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
+
+                  {/* Outbound Flights - Always show for ida or ida-volta */}
+                  {(flightDetailsForm.watch("direcao") === "ida" || flightDetailsForm.watch("direcao") === "ida-volta") && (
+                    <div className="p-4 border border-border rounded-lg bg-green-50 dark:bg-green-950/20">
+                      <h4 className="font-semibold text-foreground mb-4 flex items-center">
+                        🛫 Voos de Ida
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="numeroVoo"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Número do Voo</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: AD1234" data-testid="input-flight-number" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="companhiaAerea"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Companhia Aérea</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: Azul, LATAM, GOL" data-testid="input-airline" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="classe"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Classe</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: Econômica, Executiva" data-testid="input-class" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="origem"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Aeroporto de Origem</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: São Paulo (GRU)" data-testid="input-origin" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="destino"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Aeroporto de Destino</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: Rio de Janeiro (SDU)" data-testid="input-destination" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="dataVoo"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Data do Voo</FormLabel>
+                              <FormControl>
+                                <Input type="date" {...field} data-testid="input-flight-date" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="horarioPartida"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Horário de Partida</FormLabel>
+                              <FormControl>
+                                <Input type="time" {...field} data-testid="input-departure-time" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="horarioChegada"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Horário de Chegada</FormLabel>
+                              <FormControl>
+                                <Input type="time" {...field} data-testid="input-arrival-time" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="mt-4">
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="observacoes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Observações dos Voos de Ida</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} placeholder="Conexões, escalas, bagagem ou outras informações..." data-testid="input-flight-notes" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Return Flights - Show only for ida-volta */}
+                  {flightDetailsForm.watch("direcao") === "ida-volta" && (
+                    <div className="p-4 border border-border rounded-lg bg-orange-50 dark:bg-orange-950/20">
+                      <h4 className="font-semibold text-foreground mb-4 flex items-center">
+                        🛬 Voos de Volta
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="numeroVooVolta"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Número do Voo</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: AD5678" data-testid="input-return-flight-number" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="companhiaAereaVolta"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Companhia Aérea</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: Azul, LATAM, GOL" data-testid="input-return-airline" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="classeVolta"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Classe</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: Econômica, Executiva" data-testid="input-return-class" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="dataVooVolta"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Data do Voo</FormLabel>
+                              <FormControl>
+                                <Input type="date" {...field} data-testid="input-return-flight-date" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="horarioPartidaVolta"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Horário de Partida</FormLabel>
+                              <FormControl>
+                                <Input type="time" {...field} data-testid="input-return-departure-time" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="horarioChegadaVolta"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Horário de Chegada</FormLabel>
+                              <FormControl>
+                                <Input type="time" {...field} data-testid="input-return-arrival-time" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="mt-4">
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="observacoesVolta"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Observações dos Voos de Volta</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} placeholder="Conexões, escalas, bagagem ou outras informações..." data-testid="input-return-flight-notes" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Only Return Flights - Show only for volta */}
+                  {flightDetailsForm.watch("direcao") === "volta" && (
+                    <div className="p-4 border border-border rounded-lg bg-orange-50 dark:bg-orange-950/20">
+                      <h4 className="font-semibold text-foreground mb-4 flex items-center">
+                        🛬 Voo de Volta
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="numeroVoo"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Número do Voo</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: AD5678" data-testid="input-flight-number" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="companhiaAerea"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Companhia Aérea</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: Azul, LATAM, GOL" data-testid="input-airline" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="classe"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Classe</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: Econômica, Executiva" data-testid="input-class" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="origem"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Aeroporto de Origem</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: Rio de Janeiro (SDU)" data-testid="input-origin" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="destino"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Aeroporto de Destino</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Ex: São Paulo (GRU)" data-testid="input-destination" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="dataVoo"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Data do Voo</FormLabel>
+                              <FormControl>
+                                <Input type="date" {...field} data-testid="input-flight-date" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="horarioPartida"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Horário de Partida</FormLabel>
+                              <FormControl>
+                                <Input type="time" {...field} data-testid="input-departure-time" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="horarioChegada"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Horário de Chegada</FormLabel>
+                              <FormControl>
+                                <Input type="time" {...field} data-testid="input-arrival-time" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="mt-4">
+                        <FormField
+                          control={flightDetailsForm.control}
+                          name="observacoes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Observações do Voo</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} placeholder="Conexões, escalas, bagagem ou outras informações..." data-testid="input-flight-notes" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

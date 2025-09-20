@@ -94,11 +94,23 @@ Preferred communication style: Simple, everyday language.
 - **Smart Display**: Service listings show comprehensive hotel information with hospitality icons
 - **Full CRUD Support**: Create, read, update, and delete hotel bookings with preserved details
 
+## Banking Transfer System (NEW)
+- **Secure Bank-to-Bank Transfers**: Complete inter-account transfer functionality with production-grade security
+  - Atomic database transactions with row-level locks (FOR UPDATE)
+  - Deterministic lock ordering to prevent deadlocks  
+  - Real-time balance validation and updates
+  - Comprehensive transaction history with linked debit/credit entries
+- **Authorization & Security**: Role-based access control (admin/supervisor only)
+- **Error Handling**: Structured responses (400/422/500) with field-specific validation
+- **User Experience**: Intuitive modal with account selection, amount validation, and immediate balance feedback
+- **Data Integrity**: Harmonized numeric types, precise decimal handling, and automatic cache invalidation
+
 ## Technical Implementation
 - **Schema Integration**: Both flight and hotel details use existing services.detalhes JSONB column
 - **Type Safety**: Full TypeScript typing with Zod schemas for validation
 - **Form Management**: React Hook Form integration with conditional field rendering
 - **Industry Standards**: Field coverage meets professional travel agency requirements
+- **Financial Security**: Production-ready banking operations with comprehensive security measures
 
 ## Frontend Packages
 - **TanStack Query**: Server state management and caching
