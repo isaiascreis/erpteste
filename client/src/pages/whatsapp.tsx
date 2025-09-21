@@ -6,7 +6,7 @@ import { ChatInterface } from "@/components/whatsapp/chat-interface";
 import { QrCode, MessageSquare, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const WHATSAPP_SERVER_URL = "https://mondial-whatsapp-server.onrender.com";
+const WHATSAPP_SERVER_URL = ""; // Usar rotas locais do ERP integrado
 
 export default function WhatsApp() {
   const [activeTab, setActiveTab] = useState("chat");
@@ -24,7 +24,7 @@ export default function WhatsApp() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos timeout
       
-      const response = await fetch(`${WHATSAPP_SERVER_URL}/status`, { 
+      const response = await fetch(`/api/whatsapp/status`, { 
         cache: 'no-store',
         method: 'GET',
         signal: controller.signal,
@@ -84,7 +84,7 @@ export default function WhatsApp() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos timeout
       
-      const response = await fetch(`${WHATSAPP_SERVER_URL}/qr`, { 
+      const response = await fetch(`/api/whatsapp/qr`, { 
         cache: 'no-store',
         method: 'GET',
         signal: controller.signal,

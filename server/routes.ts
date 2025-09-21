@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupSimpleAuth, isAuthenticated } from "./simpleAuth";
 import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema } from "@shared/schema";
 import { z } from "zod";
+import { WhatsAppAPI } from "./whatsapp";
 
 // Transfer validation schema
 const transferBankAccountSchema = z.object({
@@ -693,7 +694,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Proxy route for sending messages to external WhatsApp server
+  // WhatsApp integrado - Status do servidor
+  app.get('/api/whatsapp/status', async (req, res) => {
+    try {
+      const status = WhatsAppAPI.getStatus();
+      res.json(status);
+    } catch (error) {
+      console.error("Error getting WhatsApp status:", error);
+      res.status(500).json({ message: "Failed to get WhatsApp status" });
+    }
+  });
+
+  // WhatsApp integrado - QR Code
+  app.get('/api/whatsapp/qr', async (req, res) => {
+    try {
+      const qrCode = WhatsAppAPI.getQRCode();
+      if (qrCode) {
+        res.json({ qrCode });
+      } else {
+        res.status(404).json({ error: 'QR Code não disponível' });
+      }
+    } catch (error) {
+      console.error("Error getting QR code:", error);
+      res.status(500).json({ message: "Failed to get QR code" });
+    }
+  });
+
+  // WhatsApp integrado - Enviar mensagem
   app.post('/api/whatsapp/send', isAuthenticated, async (req, res) => {
     try {
       // Validate send message payload
@@ -712,22 +739,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { phone, message } = validationResult.data;
 
-      const WHATSAPP_SERVER_URL = "https://mondial-whatsapp-server.onrender.com";
+      // Enviar via WhatsApp integrado
+      const success = await WhatsAppAPI.sendMessage(phone, message);
       
-      // Forward the request to external WhatsApp server
-      const response = await fetch(`${WHATSAPP_SERVER_URL}/send-message`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone, message }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`WhatsApp server responded with status: ${response.status}`);
+      if (!success) {
+        throw new Error('Falha ao enviar mensagem via WhatsApp integrado');
       }
-
-      const result = await response.json();
       
       // Save sent message to local database
       const conversation = await storage.getOrCreateConversation(phone, "Usuario");
@@ -735,7 +752,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate message data with Zod
       const messageData = insertWhatsappMessageSchema.parse({
         conversationId: conversation.id,
-        messageId: result.messageId || `local_${Date.now()}`,
+        messageId: `local_${Date.now()}`,
         type: 'text',
         content: message,
         fromMe: true,
@@ -745,7 +762,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.createMessage(messageData);
 
-      res.json(result);
+      res.json({ success: true, messageId: messageData.messageId });
     } catch (error) {
       console.error("Error sending WhatsApp message:", error);
       res.status(500).json({ message: "Failed to send WhatsApp message" });
