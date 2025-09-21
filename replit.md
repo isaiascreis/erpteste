@@ -105,12 +105,27 @@ Preferred communication style: Simple, everyday language.
 - **User Experience**: Intuitive modal with account selection, amount validation, and immediate balance feedback
 - **Data Integrity**: Harmonized numeric types, precise decimal handling, and automatic cache invalidation
 
+## PDF Contract Generation System (NEW)
+- **Automated Contract Generation**: Integrated PDF contract generation from sales form
+  - Button appears only for confirmed sales (status === 'venda')
+  - Real-time validation of prerequisites (client selected, services added)
+  - Template-based document creation with dynamic variable interpolation
+- **Template Engine**: Flexible template system with configurable content
+  - Support for contract and voucher templates
+  - Variable interpolation: `{{nomeCliente}}`, `{{numeroVenda}}`, `{{valorTotal}}`, `{{servicos}}`, `{{passageiros}}`, `{{clausulas}}`, `{{dataVenda}}`, `{{dataAtual}}`, `{{emailCliente}}`
+  - CRUD interface for managing contract clauses and document templates
+- **Settings Management**: Comprehensive settings interface for contract customization
+  - Contract clauses management with type-based organization (contrato/voucher)
+  - Document templates with HTML content editor and active/inactive status
+  - Organized two-column layout for efficient management
+
 ## Technical Implementation
 - **Schema Integration**: Both flight and hotel details use existing services.detalhes JSONB column
 - **Type Safety**: Full TypeScript typing with Zod schemas for validation
 - **Form Management**: React Hook Form integration with conditional field rendering
 - **Industry Standards**: Field coverage meets professional travel agency requirements
 - **Financial Security**: Production-ready banking operations with comprehensive security measures
+- **Document Generation**: Template-based system with backend API integration and frontend validation
 
 ## Frontend Packages
 - **TanStack Query**: Server state management and caching
