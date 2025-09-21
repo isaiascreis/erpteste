@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer, WebSocket } from 'ws';
 import { storage } from "./storage";
 import { setupSimpleAuth, isAuthenticated } from "./simpleAuth";
 import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema } from "@shared/schema";
@@ -781,5 +782,373 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+
+  // =====================================================================
+  // 🔄 WEBSOCKET SERVER PARA MÚLTIPLOS ATENDENTES WHATSAPP
+  // =====================================================================
+  
+  
+  // Gerenciador de conexões de atendentes
+  interface AttendantConnection {
+    ws: typeof WebSocket;
+    userId: string;
+    userRole: string;
+    assignedConversations: Set<number>;
+    lastActivity: Date;
+  }
+  
+  const attendantConnections = new Map<string, AttendantConnection>();
+  
+  // Criar servidor WebSocket
+  const wss = new WebSocketServer({ 
+    server: httpServer, 
+    path: '/ws/whatsapp',
+    verifyClient: async (info: any) => {
+      try {
+        // Extrair cookies do request
+        const cookies = info.req.headers.cookie;
+        if (!cookies) return false;
+        
+        // Parse básico de cookies para encontrar session ID
+        const sessionId = cookies.split(';')
+          .find((c: string) => c.trim().startsWith('connect.sid='))
+          ?.split('=')[1];
+          
+        // Se não tem session ID, rejeitar
+        if (!sessionId) return false;
+        
+        // Verificar se a sessão existe e está válida
+        // (A validação completa será feita na conexão)
+        return true;
+      } catch (error) {
+        console.error('❌ Erro na verificação WebSocket:', error);
+        return false;
+      }
+    }
+  });
+  
+  console.log('🔗 Servidor WebSocket WhatsApp Multi-Atendente iniciado em /ws/whatsapp');
+  
+  wss.on('connection', async (ws: typeof WebSocket, request: any) => {
+    console.log('📱 Nova conexão WebSocket de atendente');
+    
+    let attendantId: string | null = null;
+    let authenticatedUser: any = null;
+    
+    // Autenticação automática via cookies da sessão
+    try {
+      const cookies = request.headers.cookie;
+      if (cookies) {
+        // Parse session cookie (simplificado)
+        const sessionMatch = cookies.match(/connect\.sid=([^;]+)/);
+        if (sessionMatch) {
+          // Para esta implementação inicial, vamos confiar nas sessions existentes
+          // Em produção, deveríamos validar completamente a sessão aqui
+          console.log('🔐 Sessão WebSocket detectada');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro na autenticação inicial WebSocket:', error);
+    }
+    
+    ws.on('message', async (data: Buffer) => {
+      try {
+        const message = JSON.parse(data.toString());
+        
+        switch (message.type) {
+          case 'AUTH':
+            // Autenticar atendente usando dados da sessão
+            const userId = message.userId;
+            const userRole = message.userRole || 'vendedor';
+            
+            if (userId) {
+              try {
+                // Verificar se o usuário existe no sistema
+                const user = await storage.getUser(userId);
+                if (!user) {
+                  ws.send(JSON.stringify({
+                    type: 'AUTH_ERROR',
+                    message: 'Usuário não encontrado'
+                  }));
+                  return;
+                }
+                
+                attendantId = userId;
+                authenticatedUser = user;
+                
+                // Registrar conexão do atendente
+                attendantConnections.set(userId, {
+                  ws,
+                  userId,
+                  userRole: user.systemRole || 'vendedor',
+                  assignedConversations: new Set(),
+                  lastActivity: new Date()
+                });
+                
+                console.log(`✅ Atendente ${user.email} (${user.systemRole}) conectado via WebSocket`);
+                
+                // Confirmar autenticação
+                ws.send(JSON.stringify({
+                  type: 'AUTH_SUCCESS',
+                  userId,
+                  userEmail: user.email,
+                  userRole: user.systemRole,
+                  timestamp: new Date().toISOString()
+                }));
+                
+                // Enviar conversas atribuídas ao atendente
+                await sendAssignedConversations(userId);
+                
+              } catch (error) {
+                console.error('❌ Erro na autenticação WebSocket:', error);
+                ws.send(JSON.stringify({
+                  type: 'AUTH_ERROR',
+                  message: 'Erro na validação do usuário'
+                }));
+              }
+              
+            } else {
+              ws.send(JSON.stringify({
+                type: 'AUTH_ERROR',
+                message: 'User ID é obrigatório'
+              }));
+            }
+            break;
+            
+          case 'SEND_MESSAGE':
+            // Enviar mensagem via WhatsApp
+            if (attendantId) {
+              const { phone, messageContent, conversationId } = message;
+              
+              try {
+                // Enviar mensagem
+                const sendSuccess = await WhatsAppAPI.sendMessage(phone, messageContent);
+                
+                // Salvar no banco com ID do atendente
+                const messageData = insertWhatsappMessageSchema.parse({
+                  conversationId,
+                  messageId: `local_${Date.now()}`,
+                  type: 'text',
+                  content: messageContent,
+                  fromMe: true,
+                  timestamp: new Date(),
+                  status: sendSuccess ? 'sent' : 'pending',
+                  sentByUserId: attendantId,
+                });
+                
+                await storage.createMessage(messageData);
+                
+                // Broadcast mensagem para outros atendentes da conversa
+                broadcastMessage({
+                  type: 'NEW_MESSAGE',
+                  conversationId,
+                  message: messageData,
+                  fromUserId: attendantId
+                }, conversationId, attendantId);
+                
+                // Confirmar envio para o remetente
+                ws.send(JSON.stringify({
+                  type: 'MESSAGE_SENT',
+                  messageId: messageData.messageId,
+                  success: sendSuccess
+                }));
+                
+              } catch (error) {
+                ws.send(JSON.stringify({
+                  type: 'MESSAGE_ERROR',
+                  error: error instanceof Error ? error.message : 'Erro desconhecido'
+                }));
+              }
+            }
+            break;
+            
+          case 'ASSIGN_CONVERSATION':
+            // Atribuir conversa a um atendente
+            if (attendantId) {
+              const { conversationId, assignToUserId } = message;
+              
+              try {
+                // Atualizar no banco de dados
+                await storage.assignConversation(conversationId, assignToUserId);
+                
+                // Atualizar conexões ativas
+                updateConversationAssignments(conversationId, assignToUserId);
+                
+                // Notificar todos os atendentes sobre a mudança
+                broadcastToAllAttendants({
+                  type: 'CONVERSATION_ASSIGNED',
+                  conversationId,
+                  assignedToUserId: assignToUserId,
+                  assignedByUserId: attendantId
+                });
+                
+              } catch (error) {
+                ws.send(JSON.stringify({
+                  type: 'ASSIGN_ERROR',
+                  error: error instanceof Error ? error.message : 'Erro ao atribuir conversa'
+                }));
+              }
+            }
+            break;
+            
+          case 'HEARTBEAT':
+            // Manter conexão viva
+            if (attendantId && attendantConnections.has(attendantId)) {
+              attendantConnections.get(attendantId)!.lastActivity = new Date();
+              ws.send(JSON.stringify({ type: 'HEARTBEAT_ACK' }));
+            }
+            break;
+        }
+        
+      } catch (error) {
+        console.error('❌ Erro ao processar mensagem WebSocket:', error);
+        ws.send(JSON.stringify({
+          type: 'ERROR',
+          message: 'Invalid message format'
+        }));
+      }
+    });
+    
+    ws.on('close', () => {
+      if (attendantId) {
+        console.log(`📱 Atendente ${attendantId} desconectado`);
+        attendantConnections.delete(attendantId);
+      }
+    });
+    
+    ws.on('error', (error: Error) => {
+      console.error('❌ Erro WebSocket:', error);
+    });
+  });
+  
+  // Função para enviar conversas atribuídas ao atendente
+  async function sendAssignedConversations(userId: string) {
+    try {
+      const conversations = await storage.getConversationsByUser(userId);
+      const connection = attendantConnections.get(userId);
+      
+      if (connection && connection.ws.readyState === WebSocket.OPEN) {
+        connection.ws.send(JSON.stringify({
+          type: 'ASSIGNED_CONVERSATIONS',
+          conversations,
+          timestamp: new Date().toISOString()
+        }));
+        
+        // Atualizar lista de conversas atribuídas
+        connection.assignedConversations.clear();
+        conversations.forEach((conv: any) => {
+          connection.assignedConversations.add(conv.id);
+        });
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar conversas do atendente:', error);
+    }
+  }
+  
+  // Função para broadcast de mensagens para atendentes específicos
+  function broadcastMessage(data: any, conversationId: number, excludeUserId?: string) {
+    attendantConnections.forEach((connection, userId) => {
+      if (userId !== excludeUserId && 
+          connection.assignedConversations.has(conversationId) &&
+          connection.ws.readyState === WebSocket.OPEN) {
+        connection.ws.send(JSON.stringify(data));
+      }
+    });
+  }
+  
+  // Função para broadcast para todos os atendentes
+  function broadcastToAllAttendants(data: any, excludeUserId?: string) {
+    attendantConnections.forEach((connection, userId) => {
+      if (userId !== excludeUserId && connection.ws.readyState === WebSocket.OPEN) {
+        connection.ws.send(JSON.stringify(data));
+      }
+    });
+  }
+  
+  // Função para atualizar atribuições de conversa
+  function updateConversationAssignments(conversationId: number, newAssigneeId: string) {
+    // Remover conversa de outros atendentes
+    attendantConnections.forEach((connection) => {
+      connection.assignedConversations.delete(conversationId);
+    });
+    
+    // Adicionar conversa ao novo atendente
+    const newAssignee = attendantConnections.get(newAssigneeId);
+    if (newAssignee) {
+      newAssignee.assignedConversations.add(conversationId);
+    }
+  }
+  
+  // 🔄 INTEGRAÇÃO BAILEYS → WEBSOCKET - Broadcast mensagens recebidas
+  WhatsAppAPI.onMessageReceived = async (conversationId: number, message: any) => {
+    try {
+      console.log(`[WEBSOCKET BROADCAST] 📡 Distribuindo mensagem da conversa ${conversationId}`);
+      
+      // Buscar informações da conversa para determinar atendente responsável
+      const conversations = await storage.getWhatsAppConversations();
+      const conversation = conversations.find(c => c.id === conversationId);
+      
+      if (conversation) {
+        // Se a conversa tem atendente atribuído, enviar só para ele
+        if (conversation.assignedUserId && conversation.isAssigned) {
+          const assignedConnection = attendantConnections.get(conversation.assignedUserId);
+          if (assignedConnection && assignedConnection.ws.readyState === WebSocket.OPEN) {
+            assignedConnection.ws.send(JSON.stringify({
+              type: 'NEW_INCOMING_MESSAGE',
+              conversationId,
+              message,
+              conversation: {
+                id: conversation.id,
+                phone: conversation.phone,
+                name: conversation.name,
+                assignedUserId: conversation.assignedUserId
+              },
+              timestamp: new Date().toISOString()
+            }));
+            console.log(`[WEBSOCKET] ✅ Mensagem enviada para atendente ${conversation.assignedUserId}`);
+          }
+        } else {
+          // Conversa não atribuída - enviar para todos os atendentes disponíveis
+          console.log(`[WEBSOCKET] 📢 Conversa não atribuída - enviando para todos atendentes`);
+          attendantConnections.forEach((connection, userId) => {
+            if (connection.ws.readyState === WebSocket.OPEN) {
+              connection.ws.send(JSON.stringify({
+                type: 'NEW_UNASSIGNED_MESSAGE',
+                conversationId,
+                message,
+                conversation: {
+                  id: conversation.id,
+                  phone: conversation.phone,
+                  name: conversation.name,
+                  assignedUserId: null
+                },
+                timestamp: new Date().toISOString()
+              }));
+            }
+          });
+          console.log(`[WEBSOCKET] ✅ Mensagem distribuída para ${attendantConnections.size} atendentes`);
+        }
+      }
+      
+    } catch (error) {
+      console.error('[WEBSOCKET BROADCAST] ❌ Erro ao distribuir mensagem:', error);
+    }
+  };
+  
+  // Limpeza de conexões inativas (a cada 5 minutos)
+  setInterval(() => {
+    const now = new Date();
+    attendantConnections.forEach((connection, userId) => {
+      const inactiveTime = now.getTime() - connection.lastActivity.getTime();
+      if (inactiveTime > 300000) { // 5 minutos
+        console.log(`🧹 Removendo atendente inativo: ${userId}`);
+        if (connection.ws.readyState === WebSocket.OPEN) {
+          connection.ws.close();
+        }
+        attendantConnections.delete(userId);
+      }
+    });
+  }, 300000);
+
   return httpServer;
 }

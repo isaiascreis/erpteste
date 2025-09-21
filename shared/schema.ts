@@ -241,6 +241,12 @@ export const whatsappConversations = pgTable("whatsapp_conversations", {
   lastMessageTime: timestamp("last_message_time"),
   unreadCount: integer("unread_count").default(0).notNull(),
   clientId: integer("client_id").references(() => clients.id, { onDelete: 'set null' }),
+  // Multi-Agent Support Fields
+  assignedUserId: varchar("assigned_user_id").references(() => users.id, { onDelete: 'set null' }),
+  isAssigned: boolean("is_assigned").default(false).notNull(),
+  departmentId: integer("department_id"), // Para futuro sistema de departamentos
+  priority: varchar("priority", { length: 20 }).default("normal"), // normal, high, urgent
+  tags: text("tags").array().default([]), // Tags para categorização
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -258,6 +264,10 @@ export const whatsappMessages = pgTable("whatsapp_messages", {
   fromMe: boolean("from_me").notNull(),
   timestamp: timestamp("timestamp").notNull(),
   status: varchar("status", { length: 20 }).default('sent'), // sent, delivered, read, failed
+  // Multi-Agent Support Fields
+  sentByUserId: varchar("sent_by_user_id").references(() => users.id, { onDelete: 'set null' }), // Quem enviou (para mensagens enviadas)
+  readByUsers: text("read_by_users").array().default([]), // Array de user IDs que leram a mensagem
+  isInternal: boolean("is_internal").default(false), // Mensagem interna entre atendentes
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -406,6 +416,10 @@ export const whatsappConversationsRelations = relations(whatsappConversations, (
     fields: [whatsappConversations.clientId],
     references: [clients.id],
   }),
+  assignedUser: one(users, {
+    fields: [whatsappConversations.assignedUserId],
+    references: [users.id],
+  }),
   messages: many(whatsappMessages),
 }));
 
@@ -413,6 +427,10 @@ export const whatsappMessagesRelations = relations(whatsappMessages, ({ one }) =
   conversation: one(whatsappConversations, {
     fields: [whatsappMessages.conversationId],
     references: [whatsappConversations.id],
+  }),
+  sentByUser: one(users, {
+    fields: [whatsappMessages.sentByUserId],
+    references: [users.id],
   }),
 }));
 

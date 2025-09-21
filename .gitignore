@@ -9,3 +9,8 @@ serviceAccountKey*.json
 firebase-adminsdk*.json
 .env
 .env.local
+
+# 🔐 SEGURANÇA WHATSAPP - Arquivos de sessão Baileys contêm chaves privadas
+.baileys_auth/
+*.session.json
+creds.json

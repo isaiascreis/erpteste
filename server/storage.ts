@@ -129,6 +129,10 @@ export interface IStorage {
   getConversationMessages(conversationId: number): Promise<WhatsappMessage[]>;
   createMessage(messageData: InsertWhatsappMessage): Promise<WhatsappMessage>;
   updateMessageStatus(messageId: string, status: WhatsappMessage["status"]): Promise<WhatsappMessage>;
+  
+  // Multi-agent WhatsApp operations
+  assignConversation(conversationId: number, userId: string): Promise<WhatsappConversation>;
+  getConversationsByUser(userId: string): Promise<WhatsappConversation[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1246,6 +1250,47 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     return message;
+  }
+
+  // Multi-agent WhatsApp operations
+  async assignConversation(conversationId: number, userId: string): Promise<WhatsappConversation> {
+    const [conversation] = await db
+      .update(whatsappConversations)
+      .set({
+        assignedUserId: userId,
+        isAssigned: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(whatsappConversations.id, conversationId))
+      .returning();
+
+    return conversation;
+  }
+
+  async getConversationsByUser(userId: string): Promise<WhatsappConversation[]> {
+    return await db
+      .select({
+        id: whatsappConversations.id,
+        phone: whatsappConversations.phone,
+        name: whatsappConversations.name,
+        avatar: whatsappConversations.avatar,
+        isOnline: whatsappConversations.isOnline,
+        lastMessageTime: whatsappConversations.lastMessageTime,
+        unreadCount: whatsappConversations.unreadCount,
+        clientId: whatsappConversations.clientId,
+        assignedUserId: whatsappConversations.assignedUserId,
+        departmentId: whatsappConversations.departmentId,
+        isAssigned: whatsappConversations.isAssigned,
+        createdAt: whatsappConversations.createdAt,
+        client: {
+          id: clients.id,
+          nome: clients.nome,
+        },
+      })
+      .from(whatsappConversations)
+      .leftJoin(clients, eq(whatsappConversations.clientId, clients.id))
+      .where(eq(whatsappConversations.assignedUserId, userId))
+      .orderBy(desc(whatsappConversations.lastMessageTime));
   }
 }
 

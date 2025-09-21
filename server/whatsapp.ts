@@ -242,7 +242,25 @@ class WhatsAppIntegration {
       this.lastActivity = new Date();
 
       // Salvar conversa no banco de dados
-      await this.saveConversation(message);
+      const savedMessage = await this.saveConversation(message);
+
+      // 🔄 INTEGRAÇÃO WEBSOCKET - Notificar atendentes conectados
+      if (savedMessage && WhatsAppAPI.onMessageReceived) {
+        try {
+          WhatsAppAPI.onMessageReceived(savedMessage.conversationId, {
+            id: savedMessage.id,
+            messageId: savedMessage.messageId,
+            content: savedMessage.content,
+            type: savedMessage.type,
+            fromMe: savedMessage.fromMe,
+            timestamp: savedMessage.timestamp,
+            phone: from
+          });
+          console.log(`[WEBSOCKET] 📡 Mensagem distribuída para atendentes: ${from}`);
+        } catch (wsError) {
+          console.error('[WEBSOCKET] ❌ Erro ao distribuir mensagem:', wsError);
+        }
+      }
 
       console.log(`[BAILEYS] ✅ Mensagem de ${from} processada com sucesso`);
 
@@ -262,13 +280,13 @@ class WhatsAppIntegration {
       const messageContent = message.message?.conversation || 
                            message.message?.extendedTextMessage?.text || '';
 
-      if (!phone) return;
+      if (!phone) return null;
 
       // Obter ou criar conversa
       const conversation = await storage.getOrCreateConversation(phone, contactName);
 
       // Salvar mensagem
-      await storage.createMessage({
+      const savedMessage = await storage.createMessage({
         conversationId: conversation.id,
         messageId: message.key.id || '',
         type: message.message?.imageMessage || message.message?.videoMessage ? 'media' : 'text',
@@ -278,9 +296,15 @@ class WhatsAppIntegration {
       });
 
       console.log(`[DATABASE] ✅ Conversa e mensagem salvas - ID: ${conversation.id}`);
+      
+      return {
+        ...savedMessage,
+        conversationId: conversation.id
+      };
 
     } catch (error) {
       console.error('[DATABASE] ❌ Erro ao salvar no banco:', error);
+      return null;
     }
   }
 
@@ -393,5 +417,6 @@ export const WhatsAppAPI = {
   getStatus: () => whatsappIntegration.getStatus(),
   getQRCode: () => whatsappIntegration.getQRCode(),
   sendMessage: (phone: string, message: string) => whatsappIntegration.sendMessage(phone, message),
-  isReady: () => whatsappIntegration.isReady()
+  isReady: () => whatsappIntegration.isReady(),
+  onMessageReceived: null as ((conversationId: number, message: any) => void) | null
 };
