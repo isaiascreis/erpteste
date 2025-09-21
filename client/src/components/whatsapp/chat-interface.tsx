@@ -413,7 +413,7 @@ export function ChatInterface() {
         </div>
 
         {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto" data-testid="conversations-list">
+        <div className="conversations-list-container" data-testid="conversations-list">
           {conversationsLoading ? (
             <div className="p-8 text-center">
               <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-muted-foreground" />

@@ -154,7 +154,8 @@
 .chat-layout {
   display: grid;
   grid-template-columns: 320px 1fr;
-  height: 600px;
+  height: calc(100vh - 180px); /* Altura responsiva baseada na viewport */
+  min-height: 500px;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   overflow: hidden;
@@ -165,12 +166,14 @@
   border-right: 1px solid hsl(var(--border));
   display: flex;
   flex-direction: column;
+  height: 100%; /* Altura total para permitir flex funcionário */
 }
 
 .chat-main {
   background-color: hsl(var(--background));
   display: flex;
   flex-direction: column;
+  height: 100%; /* Altura total para permitir flex funcionário */
 }
 
 .chat-window {
@@ -183,13 +186,16 @@
   padding: 1rem;
   border-bottom: 1px solid hsl(var(--border));
   background-color: hsl(var(--card));
+  flex-shrink: 0; /* Não encolher o cabeçalho */
 }
 
 .chat-messages {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 1rem;
   background-color: hsl(var(--muted) / 0.1);
+  min-height: 0; /* Importante para flex com scroll funcionar */
 }
 
 .chat-input-area {
@@ -199,6 +205,7 @@
   display: flex;
   align-items: flex-end;
   gap: 0.75rem;
+  flex-shrink: 0; /* Não encolher a área de input */
 }
 
 .chat-input-area textarea {
@@ -312,17 +319,26 @@
   color: hsl(var(--primary));
 }
 
+/* Lista de conversas com scroll */
+.conversations-list-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0; /* Importante para flex com scroll */
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .chat-layout {
     grid-template-columns: 1fr;
-    height: auto;
+    height: calc(100vh - 100px);
+    min-height: 500px;
   }
   
   .chat-sidebar {
     border-right: none;
     border-bottom: 1px solid hsl(var(--border));
-    max-height: 200px;
+    max-height: 40vh;
   }
   
   .sidebar {
