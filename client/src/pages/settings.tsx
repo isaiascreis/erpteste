@@ -11,12 +11,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { Settings as SettingsIcon, User, Building, Palette, Bell, Shield, LogOut, Users, Plus, Edit, Trash2, CreditCard, FileText } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { insertPaymentMethodSchema, insertPaymentConditionSchema, insertContractClauseSchema } from "@shared/schema";
+import { insertPaymentMethodSchema, insertPaymentConditionSchema, insertContractClauseSchema, insertDocumentTemplateSchema } from "@shared/schema";
 
 export default function Settings() {
   // TEMPORARIAMENTE REMOVIDO - Sistema sem login
@@ -31,6 +31,8 @@ export default function Settings() {
   const [selectedPaymentMethodForConditions, setSelectedPaymentMethodForConditions] = useState<number | null>(null);
   const [showClauseForm, setShowClauseForm] = useState(false);
   const [editingClause, setEditingClause] = useState<any>(null);
+  const [showTemplateForm, setShowTemplateForm] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const { toast } = useToast();
   
   // Usuário fictício para exibição temporária
@@ -83,6 +85,17 @@ export default function Settings() {
     enabled: activeSection === "clauses",
   });
 
+  // Fetch document templates
+  const { data: documentTemplates } = useQuery({
+    queryKey: ["/api/document-templates"],
+    enabled: activeSection === "templates",
+    queryFn: async () => {
+      const res = await fetch('/api/document-templates', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch document templates');
+      return await res.json();
+    },
+  });
+
   // Forms for payment methods and conditions
   const paymentMethodForm = useForm({
     resolver: zodResolver(insertPaymentMethodSchema),
@@ -113,6 +126,16 @@ export default function Settings() {
       content: "",
       type: "contrato" as const,
       order: 0,
+      isActive: true,
+    },
+  });
+
+  const templateForm = useForm({
+    resolver: zodResolver(insertDocumentTemplateSchema),
+    defaultValues: {
+      name: "",
+      type: "contract" as const,
+      htmlContent: "",
       isActive: true,
     },
   });
@@ -237,6 +260,46 @@ export default function Settings() {
     },
   });
 
+  // Mutations for document templates
+  const createTemplateMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("/api/document-templates", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/document-templates"] });
+      setShowTemplateForm(false);
+      setEditingTemplate(null);
+      templateForm.reset();
+      toast({ title: "Template criado com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao criar template", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateTemplateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/document-templates/${id}`, "PUT", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/document-templates"] });
+      setShowTemplateForm(false);
+      setEditingTemplate(null);
+      templateForm.reset();
+      toast({ title: "Template atualizado com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar template", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteTemplateMutation = useMutation({
+    mutationFn: (id: number) => apiRequest(`/api/document-templates/${id}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/document-templates"] });
+      toast({ title: "Template removido com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao remover template", description: error.message, variant: "destructive" });
+    },
+  });
+
   // Handlers
   const handlePaymentMethodSubmit = (data: any) => {
     if (editingPaymentMethod) {
@@ -278,6 +341,20 @@ export default function Settings() {
     setEditingClause(clause);
     clauseForm.reset(clause);
     setShowClauseForm(true);
+  };
+
+  const handleTemplateSubmit = (data: any) => {
+    if (editingTemplate) {
+      updateTemplateMutation.mutate({ id: editingTemplate.id, data });
+    } else {
+      createTemplateMutation.mutate(data);
+    }
+  };
+
+  const handleEditTemplate = (template: any) => {
+    setEditingTemplate(template);
+    templateForm.reset(template);
+    setShowTemplateForm(true);
   };
 
   // Debug logging
@@ -361,6 +438,7 @@ export default function Settings() {
     { id: "sellers", label: "Vendedores", icon: Users },
     { id: "payments", label: "Formas de Pagamento", icon: CreditCard },
     { id: "clauses", label: "Cláusulas", icon: FileText },
+    { id: "templates", label: "Templates", icon: FileText },
     { id: "appearance", label: "Aparência", icon: Palette },
     { id: "notifications", label: "Notificações", icon: Bell },
     { id: "security", label: "Segurança", icon: Shield },
@@ -886,6 +964,130 @@ export default function Settings() {
             </Card>
           )}
 
+          {activeSection === "templates" && (
+            <Card data-testid="card-templates">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <FileText className="w-5 h-5 mr-2" />
+                    Templates de Documentos
+                  </div>
+                  <Button
+                    onClick={() => setShowTemplateForm(true)}
+                    size="sm"
+                    data-testid="button-add-template"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Novo Template
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Templates de Contrato */}
+                  <div>
+                    <h4 className="font-medium mb-4 text-blue-700 dark:text-blue-400">
+                      📄 Templates de Contrato
+                    </h4>
+                    <div className="space-y-3">
+                      {documentTemplates?.filter((template: any) => template.type === "contract").length > 0 ? (
+                        documentTemplates.filter((template: any) => template.type === "contract").map((template: any) => (
+                          <div key={template.id} className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-950">
+                            <div className="flex items-center justify-between mb-2">
+                              <h5 className="font-medium text-blue-800 dark:text-blue-200">{template.name}</h5>
+                              <div className="flex items-center space-x-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditTemplate(template)}
+                                  data-testid={`button-edit-template-${template.id}`}
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deleteTemplateMutation.mutate(template.id)}
+                                  className="text-red-600 hover:text-red-700"
+                                  data-testid={`button-delete-template-${template.id}`}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                              {template.htmlContent.replace(/<[^>]*>/g, '').substring(0, 100)}...
+                            </p>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              template.isActive ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                              'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                            }`}>
+                              {template.isActive ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          Nenhum template de contrato configurado
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Templates de Voucher */}
+                  <div>
+                    <h4 className="font-medium mb-4 text-green-700 dark:text-green-400">
+                      🎫 Templates de Voucher
+                    </h4>
+                    <div className="space-y-3">
+                      {documentTemplates?.filter((template: any) => template.type === "voucher").length > 0 ? (
+                        documentTemplates.filter((template: any) => template.type === "voucher").map((template: any) => (
+                          <div key={template.id} className="p-4 border rounded-lg bg-green-50 dark:bg-green-950">
+                            <div className="flex items-center justify-between mb-2">
+                              <h5 className="font-medium text-green-800 dark:text-green-200">{template.name}</h5>
+                              <div className="flex items-center space-x-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditTemplate(template)}
+                                  data-testid={`button-edit-template-${template.id}`}
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deleteTemplateMutation.mutate(template.id)}
+                                  className="text-red-600 hover:text-red-700"
+                                  data-testid={`button-delete-template-${template.id}`}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                              {template.htmlContent.replace(/<[^>]*>/g, '').substring(0, 100)}...
+                            </p>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              template.isActive ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                              'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                            }`}>
+                              {template.isActive ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          Nenhum template de voucher configurado
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {activeSection === "appearance" && (
             <Card data-testid="card-appearance">
               <CardHeader>
@@ -1390,6 +1592,133 @@ export default function Settings() {
                   data-testid="button-save-clause"
                 >
                   {editingClause ? "Atualizar" : "Criar"} Cláusula
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Document Template Modal */}
+      <Dialog open={showTemplateForm} onOpenChange={setShowTemplateForm}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-template">
+          <DialogHeader>
+            <DialogTitle>
+              {editingTemplate ? "Editar Template" : "Novo Template"}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Configure templates HTML para geração automática de contratos e vouchers.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...templateForm}>
+            <form onSubmit={templateForm.handleSubmit(handleTemplateSubmit)} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={templateForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome do Template *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Ex: Contrato de Viagem Internacional" data-testid="input-template-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={templateForm.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de Template *</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-template-type">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="contract">Contrato</SelectItem>
+                          <SelectItem value="voucher">Voucher</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={templateForm.control}
+                name="isActive"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 space-y-0">
+                    <div className="space-y-0.5">
+                      <FormLabel>Template Ativo</FormLabel>
+                      <div className="text-sm text-muted-foreground">
+                        Disponibilizar template para geração de documentos
+                      </div>
+                    </div>
+                    <FormControl>
+                      <Button
+                        type="button"
+                        variant={field.value ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => field.onChange(!field.value)}
+                        data-testid="toggle-template-active"
+                      >
+                        {field.value ? "Ativo" : "Inativo"}
+                      </Button>
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={templateForm.control}
+                name="htmlContent"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Conteúdo HTML do Template *</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        {...field} 
+                        placeholder="Digite o HTML do template..."
+                        rows={15}
+                        className="resize-none font-mono text-sm"
+                        data-testid="textarea-template-content" 
+                      />
+                    </FormControl>
+                    <div className="text-sm text-muted-foreground">
+                      💡 Use variáveis como {"{"}{"{"}{"}"}nomeCliente{"}"}{"}"},  {"{"}{"{"}{"}"}numeroVenda{"}"}{"}"},  {"{"}{"{"}{"}"}servicos{"}"}{"}"},  {"{"}{"{"}{"}"}valorTotal{"}"}{"}"}  para personalizar templates.
+                      Inclua HTML completo com tags &lt;html&gt;, &lt;head&gt;, &lt;body&gt;.
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={() => {
+                    setShowTemplateForm(false);
+                    setEditingTemplate(null);
+                    templateForm.reset();
+                  }}
+                  data-testid="button-cancel-template"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createTemplateMutation.isPending || updateTemplateMutation.isPending}
+                  data-testid="button-save-template"
+                >
+                  {editingTemplate ? "Atualizar" : "Criar"} Template
                 </Button>
               </div>
             </form>
