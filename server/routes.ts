@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from 'ws';
 import { storage } from "./storage";
 import { setupSimpleAuth, isAuthenticated } from "./simpleAuth";
-import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema } from "@shared/schema";
+import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema, insertSaleRequirementSchema, insertSaleCommissionSchema, insertNotificationSchema, insertPaymentPlanSchema } from "@shared/schema";
 import { z } from "zod";
 import { WhatsAppAPI, whatsappIntegration } from "./whatsapp";
 
@@ -352,6 +352,250 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating sale status:", error);
       res.status(500).json({ message: "Failed to update sale status" });
+    }
+  });
+
+  // Sale requirements routes
+  app.get('/api/sales/:id/requirements', isAuthenticated, async (req, res) => {
+    try {
+      const saleId = parseInt(req.params.id);
+      if (isNaN(saleId) || saleId <= 0) {
+        return res.status(400).json({ message: "Invalid sale ID" });
+      }
+      const requirements = await storage.getSaleRequirements(saleId);
+      res.json(requirements);
+    } catch (error) {
+      console.error("Error fetching sale requirements:", error);
+      res.status(500).json({ message: "Failed to fetch sale requirements" });
+    }
+  });
+
+  app.post('/api/sales/:id/requirements', isAuthenticated, async (req, res) => {
+    try {
+      const saleId = parseInt(req.params.id);
+      if (isNaN(saleId) || saleId <= 0) {
+        return res.status(400).json({ message: "Invalid sale ID" });
+      }
+      const requirementData = insertSaleRequirementSchema.parse({
+        ...req.body,
+        vendaId: saleId,
+      });
+      const requirement = await storage.createSaleRequirement(requirementData);
+      res.json(requirement);
+    } catch (error) {
+      console.error("Error creating sale requirement:", error);
+      res.status(500).json({ message: "Failed to create sale requirement" });
+    }
+  });
+
+  app.put('/api/requirements/:id', isAuthenticated, requireFinancial, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid requirement ID" });
+      }
+      // Only allow updating specific fields, not vendaId or other immutable fields
+      const updateSchema = z.object({
+        tipo: z.enum(['checkin', 'cartinha', 'documentacao', 'pagamento', 'outros']).optional(),
+        titulo: z.string().min(1).optional(),
+        descricao: z.string().optional(),
+        responsavelId: z.string().optional(),
+        status: z.enum(['pendente', 'em_andamento', 'concluida', 'cancelada']).optional(),
+        prioridade: z.enum(['baixa', 'media', 'alta', 'urgente']).optional(),
+        dataVencimento: z.string().optional().transform(val => val ? new Date(val) : undefined),
+        observacoes: z.string().optional(),
+      });
+      const updateData = updateSchema.parse(req.body);
+      const requirement = await storage.updateSaleRequirement(id, updateData);
+      res.json(requirement);
+    } catch (error) {
+      console.error("Error updating sale requirement:", error);
+      res.status(500).json({ message: "Failed to update sale requirement" });
+    }
+  });
+
+  app.put('/api/requirements/:id/complete', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid requirement ID" });
+      }
+      const requirement = await storage.completeSaleRequirement(id);
+      res.json(requirement);
+    } catch (error) {
+      console.error("Error completing sale requirement:", error);
+      res.status(500).json({ message: "Failed to complete sale requirement" });
+    }
+  });
+
+  app.delete('/api/requirements/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid requirement ID" });
+      }
+      await storage.deleteSaleRequirement(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting sale requirement:", error);
+      res.status(500).json({ message: "Failed to delete sale requirement" });
+    }
+  });
+
+  // Sale commissions routes
+  app.get('/api/commissions', isAuthenticated, async (req, res) => {
+    try {
+      const { saleId, userId } = req.query;
+      const commissions = await storage.getSaleCommissions(
+        saleId ? parseInt(saleId as string) : undefined,
+        userId as string
+      );
+      res.json(commissions);
+    } catch (error) {
+      console.error("Error fetching sale commissions:", error);
+      res.status(500).json({ message: "Failed to fetch sale commissions" });
+    }
+  });
+
+  app.post('/api/commissions', isAuthenticated, requireFinancial, async (req, res) => {
+    try {
+      const commissionData = insertSaleCommissionSchema.parse(req.body);
+      const commission = await storage.createSaleCommission(commissionData);
+      res.json(commission);
+    } catch (error) {
+      console.error("Error creating sale commission:", error);
+      res.status(500).json({ message: "Failed to create sale commission" });
+    }
+  });
+
+  app.put('/api/commissions/:id', isAuthenticated, requireFinancial, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid commission ID" });
+      }
+      // Only allow updating specific fields, not vendaId, userId or other immutable fields
+      const updateSchema = z.object({
+        tipo: z.enum(['venda', 'incentivo', 'bonus']).optional(),
+        valor: z.number().positive().optional(),
+        percentual: z.number().min(0).max(100).optional(),
+        status: z.enum(['pendente', 'aprovada', 'recebida', 'cancelada']).optional(),
+        dataPrevisaoRecebimento: z.string().optional().transform(val => val ? new Date(val) : undefined),
+        observacoes: z.string().optional(),
+      });
+      const updateData = updateSchema.parse(req.body);
+      const commission = await storage.updateSaleCommission(id, updateData);
+      res.json(commission);
+    } catch (error) {
+      console.error("Error updating sale commission:", error);
+      res.status(500).json({ message: "Failed to update sale commission" });
+    }
+  });
+
+  app.put('/api/commissions/:id/received', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid commission ID" });
+      }
+      const commission = await storage.markCommissionAsReceived(id);
+      res.json(commission);
+    } catch (error) {
+      console.error("Error marking commission as received:", error);
+      res.status(500).json({ message: "Failed to mark commission as received" });
+    }
+  });
+
+  // Notifications routes
+  app.get('/api/notifications', isAuthenticated, async (req, res) => {
+    try {
+      const { unreadOnly } = req.query;
+      // Security: Always scope notifications to the authenticated user, ignore userId from query
+      // For now, use a default user ID since the system is running without authentication
+      const userId = req.user?.id || 'user123';
+      const notifications = await storage.getNotifications(
+        userId,
+        unreadOnly === 'true'
+      );
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  app.post('/api/notifications', isAuthenticated, requireFinancial, async (req, res) => {
+    try {
+      const notificationData = insertNotificationSchema.parse(req.body);
+      const notification = await storage.createNotification(notificationData);
+      res.json(notification);
+    } catch (error) {
+      console.error("Error creating notification:", error);
+      res.status(500).json({ message: "Failed to create notification" });
+    }
+  });
+
+  app.put('/api/notifications/:id/read', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid notification ID" });
+      }
+      // For now, use a default user ID since the system is running without authentication
+      const userId = req.user?.id || 'user123';
+      const notification = await storage.markNotificationAsRead(id, userId);
+      res.json(notification);
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ message: "Failed to mark notification as read" });
+    }
+  });
+
+  app.delete('/api/notifications/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid notification ID" });
+      }
+      await storage.deleteNotification(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+      res.status(500).json({ message: "Failed to delete notification" });
+    }
+  });
+
+  // Payment plans enhanced routes
+  app.put('/api/payment-plans/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid payment plan ID" });
+      }
+      const updateData = req.body;
+      const paymentPlan = await storage.updatePaymentPlan(id, updateData);
+      res.json(paymentPlan);
+    } catch (error) {
+      console.error("Error updating payment plan:", error);
+      res.status(500).json({ message: "Failed to update payment plan" });
+    }
+  });
+
+  app.put('/api/payment-plans/:id/liquidate', isAuthenticated, requireFinancial, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid payment plan ID" });
+      }
+      const { dataLiquidacao, observacoes } = req.body;
+      const result = await storage.liquidatePaymentPlan(id, {
+        dataLiquidacao: new Date(dataLiquidacao),
+        observacoes,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("Error liquidating payment plan:", error);
+      res.status(500).json({ message: "Failed to liquidate payment plan" });
     }
   });
 

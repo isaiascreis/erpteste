@@ -15,6 +15,9 @@ import {
   bankTransactions,
   whatsappConversations,
   whatsappMessages,
+  saleRequirements,
+  saleCommissions,
+  notifications,
   type User,
   type UpsertUser,
   type Client,
@@ -49,6 +52,12 @@ import {
   type InsertWhatsappConversation,
   type WhatsappMessage,
   type InsertWhatsappMessage,
+  type SaleRequirement,
+  type InsertSaleRequirement,
+  type SaleCommission,
+  type InsertSaleCommission,
+  type Notification,
+  type InsertNotification,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ilike, and, gte, lte, sql, desc, asc, or } from "drizzle-orm";
@@ -133,6 +142,33 @@ export interface IStorage {
   // Multi-agent WhatsApp operations
   assignConversation(conversationId: number, userId: string): Promise<WhatsappConversation>;
   getConversationsByUser(userId: string): Promise<WhatsappConversation[]>;
+
+  // Sale requirements operations
+  getSaleRequirements(saleId: number): Promise<SaleRequirement[]>;
+  createSaleRequirement(requirement: InsertSaleRequirement): Promise<SaleRequirement>;
+  updateSaleRequirement(id: number, requirement: Partial<InsertSaleRequirement>): Promise<SaleRequirement>;
+  completeSaleRequirement(id: number): Promise<SaleRequirement>;
+  deleteSaleRequirement(id: number): Promise<void>;
+
+  // Sale commissions operations
+  getSaleCommissions(saleId?: number, userId?: string): Promise<SaleCommission[]>;
+  createSaleCommission(commission: InsertSaleCommission): Promise<SaleCommission>;
+  updateSaleCommission(id: number, commission: Partial<InsertSaleCommission>): Promise<SaleCommission>;
+  markCommissionAsReceived(id: number): Promise<SaleCommission>;
+
+  // Notifications operations
+  getNotifications(userId?: string, unreadOnly?: boolean): Promise<Notification[]>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationAsRead(id: number, userId?: string): Promise<Notification>;
+  deleteNotification(id: number): Promise<void>;
+
+  // Enhanced payment operations with financial sync
+  updatePaymentPlan(id: number, data: Partial<InsertPaymentPlan>): Promise<PaymentPlan>;
+  liquidatePaymentPlan(id: number, liquidationData: { dataLiquidacao: Date; observacoes?: string }): Promise<{
+    paymentPlan: PaymentPlan;
+    financialAccount?: FinancialAccount;
+    commission?: SaleCommission;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1291,6 +1327,339 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(clients, eq(whatsappConversations.clientId, clients.id))
       .where(eq(whatsappConversations.assignedUserId, userId))
       .orderBy(desc(whatsappConversations.lastMessageTime));
+  }
+
+  // Sale requirements operations
+  async getSaleRequirements(saleId: number): Promise<SaleRequirement[]> {
+    return await db
+      .select()
+      .from(saleRequirements)
+      .where(eq(saleRequirements.vendaId, saleId))
+      .orderBy(asc(saleRequirements.dataVencimento));
+  }
+
+  async createSaleRequirement(requirement: InsertSaleRequirement): Promise<SaleRequirement> {
+    const [created] = await db
+      .insert(saleRequirements)
+      .values(requirement)
+      .returning();
+    
+    return created;
+  }
+
+  async updateSaleRequirement(id: number, requirement: Partial<InsertSaleRequirement>): Promise<SaleRequirement> {
+    const [updated] = await db
+      .update(saleRequirements)
+      .set({
+        ...requirement,
+        updatedAt: new Date(),
+      })
+      .where(eq(saleRequirements.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async completeSaleRequirement(id: number): Promise<SaleRequirement> {
+    const [completed] = await db
+      .update(saleRequirements)
+      .set({
+        status: 'concluida',
+        dataConclusao: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(saleRequirements.id, id))
+      .returning();
+    
+    return completed;
+  }
+
+  async deleteSaleRequirement(id: number): Promise<void> {
+    await db
+      .delete(saleRequirements)
+      .where(eq(saleRequirements.id, id));
+  }
+
+  // Sale commissions operations
+  async getSaleCommissions(saleId?: number, userId?: string): Promise<SaleCommission[]> {
+    let query = db
+      .select({
+        id: saleCommissions.id,
+        vendaId: saleCommissions.vendaId,
+        userId: saleCommissions.userId,
+        tipo: saleCommissions.tipo,
+        valor: saleCommissions.valorComissao,
+        percentual: saleCommissions.percentual,
+        status: saleCommissions.status,
+        dataPrevisaoRecebimento: saleCommissions.dataPrevisaoRecebimento,
+        dataRecebimento: saleCommissions.dataRecebimento,
+        observacoes: saleCommissions.observacoes,
+        createdAt: saleCommissions.createdAt,
+        updatedAt: saleCommissions.updatedAt,
+        sale: {
+          id: sales.id,
+          numero: sales.numero,
+          status: sales.status,
+        },
+        user: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+        },
+      })
+      .from(saleCommissions)
+      .leftJoin(sales, eq(saleCommissions.vendaId, sales.id))
+      .leftJoin(users, eq(saleCommissions.userId, users.id));
+
+    if (saleId) {
+      query = query.where(eq(saleCommissions.vendaId, saleId));
+    }
+    if (userId) {
+      query = query.where(eq(saleCommissions.userId, userId));
+    }
+
+    return await query.orderBy(desc(saleCommissions.createdAt));
+  }
+
+  async createSaleCommission(commission: InsertSaleCommission): Promise<SaleCommission> {
+    const [created] = await db
+      .insert(saleCommissions)
+      .values(commission)
+      .returning();
+    
+    return created;
+  }
+
+  async updateSaleCommission(id: number, commission: Partial<InsertSaleCommission>): Promise<SaleCommission> {
+    const [updated] = await db
+      .update(saleCommissions)
+      .set({
+        ...commission,
+        updatedAt: new Date(),
+      })
+      .where(eq(saleCommissions.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async markCommissionAsReceived(id: number): Promise<SaleCommission> {
+    const [received] = await db
+      .update(saleCommissions)
+      .set({
+        status: 'recebida',
+        dataRecebimento: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(saleCommissions.id, id))
+      .returning();
+    
+    return received;
+  }
+
+  // Notifications operations
+  async getNotifications(userId?: string, unreadOnly?: boolean): Promise<Notification[]> {
+    try {
+      console.log('Getting notifications for userId:', userId, 'unreadOnly:', unreadOnly);
+      
+      if (userId && unreadOnly) {
+        const result = await db
+          .select()
+          .from(notifications)
+          .where(and(eq(notifications.userId, userId), eq(notifications.status, 'nao_lida')))
+          .orderBy(desc(notifications.createdAt));
+        console.log('Query result (userId + unreadOnly):', result);
+        return result;
+      } else if (userId) {
+        const result = await db
+          .select()
+          .from(notifications)
+          .where(eq(notifications.userId, userId))
+          .orderBy(desc(notifications.createdAt));
+        console.log('Query result (userId only):', result);
+        return result;
+      } else if (unreadOnly) {
+        const result = await db
+          .select()
+          .from(notifications)
+          .where(eq(notifications.status, 'nao_lida'))
+          .orderBy(desc(notifications.createdAt));
+        console.log('Query result (unreadOnly):', result);
+        return result;
+      } else {
+        const result = await db
+          .select()
+          .from(notifications)
+          .orderBy(desc(notifications.createdAt));
+        console.log('Query result (all):', result);
+        return result;
+      }
+    } catch (error) {
+      console.error('Error in getNotifications:', error);
+      throw error;
+    }
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [created] = await db
+      .insert(notifications)
+      .values(notification)
+      .returning();
+    
+    return created;
+  }
+
+  async markNotificationAsRead(id: number, userId?: string): Promise<Notification> {
+    let whereClause = eq(notifications.id, id);
+    
+    // Add userId authorization check if provided
+    if (userId) {
+      whereClause = and(eq(notifications.id, id), eq(notifications.userId, userId));
+    }
+    
+    const [read] = await db
+      .update(notifications)
+      .set({
+        status: 'lida',
+        updatedAt: new Date(),
+      })
+      .where(whereClause)
+      .returning();
+    
+    if (!read) {
+      throw new Error("Notification not found or access denied");
+    }
+    
+    return read;
+  }
+
+  async deleteNotification(id: number): Promise<void> {
+    await db
+      .delete(notifications)
+      .where(eq(notifications.id, id));
+  }
+
+  // Enhanced payment operations with financial sync
+  async updatePaymentPlan(id: number, data: Partial<InsertPaymentPlan>): Promise<PaymentPlan> {
+    const [updated] = await db
+      .update(paymentPlans)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(paymentPlans.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async liquidatePaymentPlan(id: number, liquidationData: { dataLiquidacao: Date; observacoes?: string }): Promise<{
+    paymentPlan: PaymentPlan;
+    financialAccount?: FinancialAccount;
+    commission?: SaleCommission;
+  }> {
+    return await db.transaction(async (tx) => {
+      // Get payment plan with sale details
+      const [paymentPlan] = await tx
+        .select({
+          id: paymentPlans.id,
+          vendaId: paymentPlans.vendaId,
+          tipo: paymentPlans.tipo,
+          valor: paymentPlans.valor,
+          descricao: paymentPlans.descricao,
+          dataVencimento: paymentPlans.dataVencimento,
+          dataLiquidacao: paymentPlans.dataLiquidacao,
+          observacoes: paymentPlans.observacoes,
+          status: paymentPlans.status,
+          sale: {
+            id: sales.id,
+            numero: sales.numero,
+            clienteId: sales.clienteId,
+            fornecedorId: sales.fornecedorId,
+          },
+        })
+        .from(paymentPlans)
+        .leftJoin(sales, eq(paymentPlans.vendaId, sales.id))
+        .where(eq(paymentPlans.id, id));
+
+      if (!paymentPlan) {
+        throw new Error("Plano de pagamento não encontrado");
+      }
+
+      // Update payment plan as liquidated
+      const [updatedPaymentPlan] = await tx
+        .update(paymentPlans)
+        .set({
+          status: 'liquidado',
+          dataLiquidacao: liquidationData.dataLiquidacao,
+          observacoes: liquidationData.observacoes,
+          updatedAt: new Date(),
+        })
+        .where(eq(paymentPlans.id, id))
+        .returning();
+
+      let financialAccount: FinancialAccount | undefined;
+      let commission: SaleCommission | undefined;
+
+      // If payment to supplier, create accounts payable entry
+      if (paymentPlan.tipo === 'fornecedor' && paymentPlan.sale?.fornecedorId) {
+        const [created] = await tx
+          .insert(financialAccounts)
+          .values({
+            vendaId: paymentPlan.vendaId,
+            fornecedorId: paymentPlan.sale.fornecedorId,
+            tipo: 'contas_pagar',
+            descricao: `Pagamento a fornecedor - ${paymentPlan.descricao}`,
+            valor: paymentPlan.valor,
+            status: 'em_aberto',
+            dataVencimento: liquidationData.dataLiquidacao,
+          })
+          .returning();
+        
+        financialAccount = created;
+
+        // Create commission receivable for this payment
+        const [createdCommission] = await tx
+          .insert(saleCommissions)
+          .values({
+            vendaId: paymentPlan.vendaId,
+            userId: '', // TODO: Get from sale sellers
+            tipo: 'venda',
+            valor: paymentPlan.valor * 0.05, // 5% commission example
+            percentual: 5,
+            status: 'pendente',
+            dataPrevisaoRecebimento: new Date(liquidationData.dataLiquidacao.getTime() + 30 * 24 * 60 * 60 * 1000), // +30 days
+            observacoes: `Comissão referente ao pagamento: ${paymentPlan.descricao}`,
+          })
+          .returning();
+        
+        commission = createdCommission;
+      }
+
+      // If payment from agency, create accounts receivable entry  
+      if (paymentPlan.tipo === 'agencia' && paymentPlan.sale?.clienteId) {
+        const [created] = await tx
+          .insert(financialAccounts)
+          .values({
+            vendaId: paymentPlan.vendaId,
+            clienteId: paymentPlan.sale.clienteId,
+            tipo: 'contas_receber',
+            descricao: `Recebimento da agência - ${paymentPlan.descricao}`,
+            valor: paymentPlan.valor,
+            status: 'liquidado',
+            dataVencimento: liquidationData.dataLiquidacao,
+          })
+          .returning();
+        
+        financialAccount = created;
+      }
+
+      return {
+        paymentPlan: updatedPaymentPlan,
+        financialAccount,
+        commission,
+      };
+    });
   }
 }
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { NotificationBar } from "@/components/notifications/notification-bar";
 import { 
   Plane, 
   BarChart3, 
@@ -64,16 +65,19 @@ export function Sidebar() {
       >
         {/* Header */}
         <div className="p-6 border-b border-sidebar-border">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <Plane className="text-primary-foreground text-lg w-5 h-5" />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                <Plane className="text-primary-foreground text-lg w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-sidebar-foreground" data-testid="text-app-title">
+                  Mondial Turismo
+                </h1>
+                <p className="text-sm text-muted-foreground">Sistema ERP</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg font-semibold text-sidebar-foreground" data-testid="text-app-title">
-                Mondial Turismo
-              </h1>
-              <p className="text-sm text-muted-foreground">Sistema ERP</p>
-            </div>
+            <NotificationBar />
           </div>
         </div>
 

@@ -254,16 +254,14 @@ export const saleCommissions = pgTable("sale_commissions", {
 // Notifications - Sistema de notificações
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id").references(() => users.id).notNull(),
-  tipo: varchar("tipo", { length: 50 }).notNull(), // comissao, tarefa, sistema
+  userId: varchar("user_id").notNull(),
+  vendaId: integer("venda_id"),
+  tipo: varchar("tipo", { length: 50 }).notNull(), // comissao, tarefa, vencimento
   titulo: varchar("titulo", { length: 255 }).notNull(),
-  descricao: text("descricao"),
-  vendaId: integer("venda_id").references(() => sales.id),
-  requirementId: integer("requirement_id").references(() => saleRequirements.id),
-  commissionId: integer("commission_id").references(() => saleCommissions.id),
-  lida: boolean("lida").default(false),
+  mensagem: text("mensagem"),
+  status: varchar("status", { length: 20 }).default("nao_lida"), // nao_lida, lida
+  prioridade: varchar("prioridade", { length: 20 }).default("normal"), // baixa, media, alta, urgente
   dataVencimento: timestamp("data_vencimento"),
-  prioridade: varchar("prioridade", { length: 20 }).default("normal"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -518,21 +516,9 @@ export const saleCommissionsRelations = relations(saleCommissions, ({ one }) => 
 }));
 
 export const notificationsRelations = relations(notifications, ({ one }) => ({
-  user: one(users, {
-    fields: [notifications.userId],
-    references: [users.id],
-  }),
   sale: one(sales, {
     fields: [notifications.vendaId],
     references: [sales.id],
-  }),
-  requirement: one(saleRequirements, {
-    fields: [notifications.requirementId],
-    references: [saleRequirements.id],
-  }),
-  commission: one(saleCommissions, {
-    fields: [notifications.commissionId],
-    references: [saleCommissions.id],
   }),
 }));
 
