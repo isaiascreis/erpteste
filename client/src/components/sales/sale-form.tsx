@@ -38,6 +38,16 @@ const passengerSchema = z.object({
   observacoes: z.string().optional(),
 });
 
+const clientSchema = z.object({
+  nome: z.string().min(1, "Nome é obrigatório"),
+  email: z.string().email("Email inválido").optional().or(z.literal("")),
+  telefone: z.string().optional(),
+  cpf: z.string().optional(),
+  endereco: z.string().optional(),
+  dataNascimento: z.string().optional(),
+  observacoes: z.string().optional(),
+});
+
 const serviceSchema = z.object({
   tipo: z.enum(["aereo", "hotel", "transfer", "outros"]),
   descricao: z.string().min(1, "Descrição é obrigatória"),
@@ -145,6 +155,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   const [showRequirementModal, setShowRequirementModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [searchClient, setSearchClient] = useState("");
+  const [showClientModal, setShowClientModal] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -273,6 +284,19 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
       status: "pendente", 
       prioridade: "normal", 
       observacoes: "" 
+    },
+  });
+
+  const clientForm = useForm<z.infer<typeof clientSchema>>({
+    resolver: zodResolver(clientSchema),
+    defaultValues: {
+      nome: "",
+      email: "",
+      telefone: "",
+      cpf: "",
+      endereco: "",
+      dataNascimento: "",
+      observacoes: "",
     },
   });
 
@@ -445,6 +469,52 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
       }
       toast({ 
         title: "Erro ao confirmar venda", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const createClientMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof clientSchema>) => {
+      return await apiRequest("POST", "/api/clients", data);
+    },
+    onSuccess: (newClient: any) => {
+      toast({ title: "Cliente criado com sucesso!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      
+      // Add the new client as a passenger
+      const newPassenger = {
+        id: Date.now(),
+        clienteId: newClient.id,
+        nome: newClient.nome,
+        cpf: newClient.cpf,
+        dataNascimento: newClient.dataNascimento,
+        funcao: "passageiro",
+        isFromClients: true
+      };
+      setPassengers([...passengers, newPassenger]);
+      
+      // Close modals and reset form
+      setShowClientModal(false);
+      setShowPassengerModal(false);
+      setSearchClient("");
+      clientForm.reset();
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Não autorizado",
+          description: "Você está deslogado. Fazendo login novamente...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ 
+        title: "Erro ao criar cliente", 
         description: error.message,
         variant: "destructive" 
       });
@@ -636,6 +706,10 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     setShowRequirementModal(false);
     setEditingItem(null);
     requirementForm.reset();
+  };
+
+  const handleCreateClient = (data: z.infer<typeof clientSchema>) => {
+    createClientMutation.mutate(data);
   };
 
   const handleCompleteRequirement = (id: number) => {
@@ -1503,8 +1577,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                 className="w-full"
                 onClick={() => {
                   setShowPassengerModal(false);
-                  // TODO: Open new client modal
-                  alert("Funcionalidade 'Cadastrar Novo Cliente' será implementada em breve");
+                  setShowClientModal(true);
                 }}
                 data-testid="button-create-new-client"
               >
@@ -2749,6 +2822,129 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                 </Button>
                 <Button type="submit" data-testid="button-save-requirement">
                   {editingItem ? "Atualizar" : "Adicionar"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Client Creation Modal */}
+      <Dialog open={showClientModal} onOpenChange={setShowClientModal}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-client-form">
+          <DialogHeader>
+            <DialogTitle>Novo Cliente</DialogTitle>
+          </DialogHeader>
+          <Form {...clientForm}>
+            <form onSubmit={clientForm.handleSubmit(handleCreateClient)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={clientForm.control}
+                  name="nome"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome *</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-client-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={clientForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input type="email" {...field} data-testid="input-client-email" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={clientForm.control}
+                  name="telefone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Telefone</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-client-phone" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={clientForm.control}
+                  name="cpf"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>CPF</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-client-cpf" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={clientForm.control}
+                  name="dataNascimento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data de Nascimento</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-client-birth-date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={clientForm.control}
+                name="endereco"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Endereço</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-client-address" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={clientForm.control}
+                name="observacoes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observações</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} data-testid="input-client-notes" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={() => setShowClientModal(false)}
+                  data-testid="button-cancel-client"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createClientMutation.isPending}
+                  data-testid="button-save-client"
+                >
+                  {createClientMutation.isPending ? "Criando..." : "Criar Cliente"}
                 </Button>
               </div>
             </form>
