@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from 'ws';
 import { storage } from "./storage";
 import { setupSimpleAuth, isAuthenticated } from "./simpleAuth";
-import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema, insertSaleRequirementSchema, insertSaleCommissionSchema, insertNotificationSchema, insertPaymentPlanSchema, insertPaymentMethodSchema, insertPaymentConditionSchema, insertServicePassengerSchema, insertSaleClientSchema, insertServiceClientSchema } from "@shared/schema";
+import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema, insertSaleRequirementSchema, insertSaleCommissionSchema, insertNotificationSchema, insertPaymentPlanSchema, insertPaymentMethodSchema, insertPaymentConditionSchema, insertServicePassengerSchema, insertSaleClientSchema, insertServiceClientSchema, insertContractClauseSchema, insertDocumentTemplateSchema } from "@shared/schema";
 import { z } from "zod";
 import { WhatsAppAPI, whatsappIntegration } from "./whatsapp";
 
@@ -1746,6 +1746,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   }, 300000);
+
+  // Contract Clauses routes
+  app.get('/api/contract-clauses', isAuthenticated, async (req, res) => {
+    try {
+      const type = req.query.type as string;
+      const clauses = await storage.getContractClauses(type);
+      res.json(clauses);
+    } catch (error) {
+      console.error('Error fetching contract clauses:', error);
+      res.status(500).json({ message: 'Erro ao buscar cláusulas contratuais' });
+    }
+  });
+
+  app.post('/api/contract-clauses', isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const clauseData = insertContractClauseSchema.parse(req.body);
+      const newClause = await storage.createContractClause(clauseData);
+      res.status(201).json(newClause);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Dados inválidos', errors: error.errors });
+      }
+      console.error('Error creating contract clause:', error);
+      res.status(500).json({ message: 'Erro ao criar cláusula contratual' });
+    }
+  });
+
+  app.put('/api/contract-clauses/:id', isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const clauseData = insertContractClauseSchema.partial().parse(req.body);
+      const updatedClause = await storage.updateContractClause(id, clauseData);
+      res.json(updatedClause);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Dados inválidos', errors: error.errors });
+      }
+      console.error('Error updating contract clause:', error);
+      res.status(500).json({ message: 'Erro ao atualizar cláusula contratual' });
+    }
+  });
+
+  app.delete('/api/contract-clauses/:id', isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteContractClause(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting contract clause:', error);
+      res.status(500).json({ message: 'Erro ao excluir cláusula contratual' });
+    }
+  });
+
+  // Document Templates routes
+  app.get('/api/document-templates', isAuthenticated, async (req, res) => {
+    try {
+      const type = req.query.type as string;
+      const templates = await storage.getDocumentTemplates(type);
+      res.json(templates);
+    } catch (error) {
+      console.error('Error fetching document templates:', error);
+      res.status(500).json({ message: 'Erro ao buscar templates de documentos' });
+    }
+  });
+
+  app.post('/api/document-templates', isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const templateData = insertDocumentTemplateSchema.parse(req.body);
+      const newTemplate = await storage.createDocumentTemplate(templateData);
+      res.status(201).json(newTemplate);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Dados inválidos', errors: error.errors });
+      }
+      console.error('Error creating document template:', error);
+      res.status(500).json({ message: 'Erro ao criar template de documento' });
+    }
+  });
+
+  app.put('/api/document-templates/:id', isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const templateData = insertDocumentTemplateSchema.partial().parse(req.body);
+      const updatedTemplate = await storage.updateDocumentTemplate(id, templateData);
+      res.json(updatedTemplate);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Dados inválidos', errors: error.errors });
+      }
+      console.error('Error updating document template:', error);
+      res.status(500).json({ message: 'Erro ao atualizar template de documento' });
+    }
+  });
+
+  app.delete('/api/document-templates/:id', isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteDocumentTemplate(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting document template:', error);
+      res.status(500).json({ message: 'Erro ao excluir template de documento' });
+    }
+  });
 
   return httpServer;
 }

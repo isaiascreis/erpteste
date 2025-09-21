@@ -22,6 +22,8 @@ import {
   saleRequirements,
   saleCommissions,
   notifications,
+  documentTemplates,
+  contractClauses,
   type User,
   type UpsertUser,
   type Client,
@@ -70,6 +72,10 @@ import {
   type InsertSaleCommission,
   type Notification,
   type InsertNotification,
+  type DocumentTemplate,
+  type InsertDocumentTemplate,
+  type ContractClause,
+  type InsertContractClause,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ilike, and, gte, lte, sql, desc, asc, or } from "drizzle-orm";
@@ -2194,6 +2200,74 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(serviceClients)
       .where(eq(serviceClients.id, id));
+  }
+
+  // Contract Clauses operations
+  async getContractClauses(type?: string): Promise<ContractClause[]> {
+    let query = db.select().from(contractClauses);
+    
+    if (type) {
+      query = query.where(eq(contractClauses.type, type as 'contrato' | 'voucher'));
+    }
+    
+    return await query.orderBy(asc(contractClauses.order), asc(contractClauses.title));
+  }
+
+  async createContractClause(data: InsertContractClause): Promise<ContractClause> {
+    const [created] = await db
+      .insert(contractClauses)
+      .values(data)
+      .returning();
+    return created;
+  }
+
+  async updateContractClause(id: number, data: Partial<InsertContractClause>): Promise<ContractClause> {
+    const [updated] = await db
+      .update(contractClauses)
+      .set(data)
+      .where(eq(contractClauses.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteContractClause(id: number): Promise<void> {
+    await db
+      .delete(contractClauses)
+      .where(eq(contractClauses.id, id));
+  }
+
+  // Document Templates operations
+  async getDocumentTemplates(type?: string): Promise<DocumentTemplate[]> {
+    let query = db.select().from(documentTemplates);
+    
+    if (type) {
+      query = query.where(eq(documentTemplates.type, type));
+    }
+    
+    return await query.orderBy(asc(documentTemplates.name));
+  }
+
+  async createDocumentTemplate(data: InsertDocumentTemplate): Promise<DocumentTemplate> {
+    const [created] = await db
+      .insert(documentTemplates)
+      .values(data)
+      .returning();
+    return created;
+  }
+
+  async updateDocumentTemplate(id: number, data: Partial<InsertDocumentTemplate>): Promise<DocumentTemplate> {
+    const [updated] = await db
+      .update(documentTemplates)
+      .set(data)
+      .where(eq(documentTemplates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteDocumentTemplate(id: number): Promise<void> {
+    await db
+      .delete(documentTemplates)
+      .where(eq(documentTemplates.id, id));
   }
 }
 

@@ -220,7 +220,7 @@ export default function Settings() {
 
   // Mutations para vendedores
   const createSellerMutation = useMutation({
-    mutationFn: (sellerData) => apiRequest("POST", "/api/users", sellerData),
+    mutationFn: (sellerData) => apiRequest("/api/users", "POST", sellerData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       setShowSellerForm(false);
@@ -240,7 +240,7 @@ export default function Settings() {
   });
 
   const updateSellerMutation = useMutation({
-    mutationFn: ({ id, ...data }: { id: string; [key: string]: any }) => apiRequest("PATCH", `/api/users/${id}`, data),
+    mutationFn: ({ id, ...data }: { id: string; [key: string]: any }) => apiRequest(`/api/users/${id}`, "PATCH", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       setShowSellerForm(false);
@@ -260,7 +260,7 @@ export default function Settings() {
   });
 
   const deleteSellerMutation = useMutation({
-    mutationFn: (id) => apiRequest("DELETE", `/api/users/${id}`),
+    mutationFn: (id) => apiRequest(`/api/users/${id}`, "DELETE"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       toast({

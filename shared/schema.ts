@@ -64,6 +64,7 @@ export const serviceTypeEnum = pgEnum("service_type", ["aereo", "hotel", "transf
 export const accountCategoryTypeEnum = pgEnum("account_category_type", ["receita", "despesa", "outros"]);
 export const paymentMethodTypeEnum = pgEnum("payment_method_type_enum", ["AGENCIA", "FORNECEDOR"]);
 export const passengerRoleEnum = pgEnum("passenger_role", ["passageiro", "contratante"]);
+export const clauseTypeEnum = pgEnum("clause_type", ["contrato", "voucher"]);
 
 // Clients
 export const clients = pgTable("clients", {
@@ -402,6 +403,7 @@ export const contractClauses = pgTable("contract_clauses", {
   id: serial("id").primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
   content: text("content").notNull(),
+  type: clauseTypeEnum("type").default("contrato").notNull(),
   order: integer("order").default(0),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -674,3 +676,7 @@ export type SaleCommission = typeof saleCommissions.$inferSelect;
 export type InsertSaleCommission = z.infer<typeof insertSaleCommissionSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type DocumentTemplate = typeof documentTemplates.$inferSelect;
+export type InsertDocumentTemplate = z.infer<typeof insertDocumentTemplateSchema>;
+export type ContractClause = typeof contractClauses.$inferSelect;
+export type InsertContractClause = z.infer<typeof insertContractClauseSchema>;
