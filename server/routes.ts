@@ -430,36 +430,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       contractHtml = contractHtml.replace(/\{\{emailCliente\}\}/g, sale.client?.email || 'Não informado');
       contractHtml = contractHtml.replace(/\{\{telefoneCliente\}\}/g, sale.client?.telefone || 'Não informado');
 
-      // For now, return HTML as PDF (browser will print to PDF)
-      // This ensures immediate functionality while we optimize the PDF generation
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Content-Disposition', `inline; filename="contrato-venda-${sale.referencia || sale.id}.html"`);
-      
-      // Add print styles to make it PDF-friendly
-      const printStyles = `
-        <style>
-          @media print {
-            body { margin: 0; padding: 20px; }
-            .page-break { page-break-before: always; }
-            .no-print { display: none; }
-          }
-          @page { 
-            size: A4; 
-            margin: 1.5cm; 
-          }
-        </style>
-        <script>
-          window.onload = function() {
-            // Auto-trigger print dialog for PDF generation
-            setTimeout(() => window.print(), 1000);
-          }
-        </script>
-      `;
-      
-      // Insert print styles into HTML head
-      const htmlWithPrintStyles = contractHtml.replace('</head>', printStyles + '</head>');
-      
-      res.send(htmlWithPrintStyles);
+      // Return HTML content as JSON for modal display
+      res.json({
+        success: true,
+        htmlContent: contractHtml,
+        saleReference: sale.referencia || sale.id
+      });
 
     } catch (error) {
       console.error("Error generating contract:", error);

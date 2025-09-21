@@ -24,7 +24,8 @@ import {
   Save,
   Check,
   FileText,
-  X
+  X,
+  Printer
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -149,6 +150,8 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   const [requirements, setRequirements] = useState<any[]>([]);
   const [servicePassengers, setServicePassengers] = useState<{[key: number]: {selected: boolean, valorCusto: string, valorVenda: string}}>({});
   const [showPassengerModal, setShowPassengerModal] = useState(false);
+  const [showContractModal, setShowContractModal] = useState(false);
+  const [contractHtml, setContractHtml] = useState<string>("");
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showSellerModal, setShowSellerModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -505,21 +508,15 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
         throw new Error('Erro ao gerar contrato');
       }
       
-      // Return blob for PDF download
-      return response.blob();
+      // Return JSON with HTML content
+      return response.json();
     },
-    onSuccess: (pdfBlob, saleId) => {
-      // Create download link for PDF
-      const url = window.URL.createObjectURL(pdfBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `contrato-venda-${sale?.referencia || saleId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+    onSuccess: (data: { success: boolean; htmlContent: string; saleReference: string }) => {
+      // Set contract HTML to show in modal
+      setContractHtml(data.htmlContent);
+      setShowContractModal(true);
       
-      toast({ title: "Contrato PDF gerado com sucesso!" });
+      toast({ title: "Contrato gerado com sucesso!" });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -3187,6 +3184,82 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Contract Modal */}
+      <Dialog open={showContractModal} onOpenChange={setShowContractModal}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="modal-contract">
+          <DialogHeader>
+            <DialogTitle>Contrato de Venda</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Contract HTML Content */}
+            <div 
+              className="bg-white p-8 border rounded-lg print:border-none print:shadow-none print:bg-white" 
+              style={{ minHeight: '600px' }}
+              dangerouslySetInnerHTML={{ __html: contractHtml }}
+              data-testid="content-contract"
+            />
+            
+            {/* Print Button */}
+            <div className="flex justify-center space-x-4 print:hidden">
+              <Button
+                onClick={() => {
+                  // Hide the modal temporarily and open print dialog
+                  const originalDisplay = document.body.style.display;
+                  
+                  // Create a new window for printing
+                  const printWindow = window.open('', '_blank');
+                  if (printWindow) {
+                    printWindow.document.write(`
+                      <!DOCTYPE html>
+                      <html>
+                        <head>
+                          <title>Contrato de Venda</title>
+                          <style>
+                            body { 
+                              font-family: Arial, sans-serif; 
+                              margin: 0; 
+                              padding: 20px; 
+                              line-height: 1.4; 
+                            }
+                            @media print {
+                              body { margin: 0; padding: 15px; }
+                            }
+                            @page { size: A4; margin: 1.5cm; }
+                          </style>
+                        </head>
+                        <body>
+                          ${contractHtml}
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.focus();
+                    printWindow.print();
+                    
+                    // Close print window after printing
+                    setTimeout(() => {
+                      printWindow.close();
+                    }, 1000);
+                  }
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                data-testid="button-print-contract"
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Imprimir
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowContractModal(false)}
+                data-testid="button-close-contract"
+              >
+                Fechar
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
