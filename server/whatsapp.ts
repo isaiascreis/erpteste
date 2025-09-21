@@ -289,7 +289,7 @@ class WhatsAppIntegration {
   // =====================================================================
   public getStatus(): WhatsAppStatus {
     const uptime = Math.round((Date.now() - this.clientStartTime) / 1000);
-    const isReady = this.sock && this.clientStatus === 'Conectado';
+    const isReady = this.sock && (this.clientStatus === 'Conectado' || this.clientStatus.includes('CONFLITO'));
 
     return {
       status: this.clientStatus,
@@ -307,8 +307,14 @@ class WhatsAppIntegration {
 
   public async sendMessage(phone: string, message: string): Promise<boolean> {
     try {
-      if (!this.sock || this.clientStatus !== 'Conectado') {
-        throw new Error('Cliente WhatsApp não está conectado');
+      // Permitir envio se socket existe, mesmo durante conflitos temporários
+      if (!this.sock) {
+        throw new Error('Cliente WhatsApp não está conectado - socket não disponível');
+      }
+      
+      // Verificar se está completamente desconectado
+      if (this.clientStatus === 'Desconectado' || this.clientStatus.includes('Reconectando')) {
+        throw new Error('Cliente WhatsApp não está conectado - ' + this.clientStatus);
       }
 
       // Formatar número de telefone para Baileys

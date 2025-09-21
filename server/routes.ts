@@ -739,17 +739,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { phone, message } = validationResult.data;
 
-      // Enviar via WhatsApp integrado
-      const success = await WhatsAppAPI.sendMessage(phone, message);
-      
-      if (!success) {
-        throw new Error('Falha ao enviar mensagem via WhatsApp integrado');
-      }
-      
-      // Save sent message to local database
+      // Get or create conversation first
       const conversation = await storage.getOrCreateConversation(phone, "Usuario");
       
-      // Validate message data with Zod
+      // Try to send via WhatsApp but don't fail if it doesn't work
+      let sendSuccess = false;
+      let errorDetails = '';
+      
+      try {
+        sendSuccess = await WhatsAppAPI.sendMessage(phone, message);
+      } catch (error) {
+        errorDetails = error instanceof Error ? error.message : 'Erro desconhecido';
+        console.log(`[SEND] ⚠️ Envio falhou, mas salvando no banco: ${errorDetails}`);
+      }
+      
+      // Always save message to database regardless of send success
       const messageData = insertWhatsappMessageSchema.parse({
         conversationId: conversation.id,
         messageId: `local_${Date.now()}`,
@@ -757,12 +761,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content: message,
         fromMe: true,
         timestamp: new Date(),
-        status: 'sent',
+        status: sendSuccess ? 'sent' : 'pending', // Mark as pending if send failed
       });
 
       await storage.createMessage(messageData);
 
-      res.json({ success: true, messageId: messageData.messageId });
+      // Return success with status info
+      res.json({ 
+        success: true, 
+        messageId: messageData.messageId,
+        sent: sendSuccess,
+        saved: true,
+        ...(errorDetails && { error: errorDetails })
+      });
     } catch (error) {
       console.error("Error sending WhatsApp message:", error);
       res.status(500).json({ message: "Failed to send WhatsApp message" });

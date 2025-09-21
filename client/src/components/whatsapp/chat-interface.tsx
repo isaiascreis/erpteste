@@ -169,7 +169,7 @@ export function ChatInterface() {
       }
       setShowNewContactForm(false);
       newContactForm.reset();
-      setSelectedConversation(result.conversation as Conversation);
+      setSelectedConversation(result.conversation as unknown as Conversation);
       // Invalidar queries para recarregar dados
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations'] });
     },
