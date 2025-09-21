@@ -430,52 +430,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       contractHtml = contractHtml.replace(/\{\{emailCliente\}\}/g, sale.client?.email || 'Não informado');
       contractHtml = contractHtml.replace(/\{\{telefoneCliente\}\}/g, sale.client?.telefone || 'Não informado');
 
-      // Generate PDF using Puppeteer
-      console.log("Starting PDF generation with Puppeteer...");
-      const puppeteer = require('puppeteer');
+      // For now, return HTML as PDF (browser will print to PDF)
+      // This ensures immediate functionality while we optimize the PDF generation
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', `inline; filename="contrato-venda-${sale.referencia || sale.id}.html"`);
       
-      try {
-        console.log("Launching browser...");
-        const browser = await puppeteer.launch({
-          headless: true,
-          args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        
-        console.log("Creating new page...");
-        const page = await browser.newPage();
-        console.log("Setting HTML content...");
-        await page.setContent(contractHtml, { 
-          waitUntil: 'networkidle0',
-          timeout: 30000
-        });
-        
-        console.log("Generating PDF...");
-        const pdfBuffer = await page.pdf({
-          format: 'A4',
-          printBackground: true,
-          margin: {
-            top: '20px',
-            right: '20px',
-            bottom: '20px',
-            left: '20px'
+      // Add print styles to make it PDF-friendly
+      const printStyles = `
+        <style>
+          @media print {
+            body { margin: 0; padding: 20px; }
+            .page-break { page-break-before: always; }
+            .no-print { display: none; }
           }
-        });
-        
-        console.log(`PDF generated successfully! Size: ${pdfBuffer.length} bytes`);
-        await browser.close();
-        
-        // Return PDF with proper headers
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="contrato-venda-${sale.referencia || sale.id}.pdf"`);
-        res.send(pdfBuffer);
-        
-      } catch (pdfError) {
-        console.error("Error generating PDF:", pdfError);
-        // Fallback to HTML if PDF generation fails
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Content-Disposition', `inline; filename="contrato-${sale.referencia || sale.id}.html"`);
-        res.send(contractHtml);
-      }
+          @page { 
+            size: A4; 
+            margin: 1.5cm; 
+          }
+        </style>
+        <script>
+          window.onload = function() {
+            // Auto-trigger print dialog for PDF generation
+            setTimeout(() => window.print(), 1000);
+          }
+        </script>
+      `;
+      
+      // Insert print styles into HTML head
+      const htmlWithPrintStyles = contractHtml.replace('</head>', printStyles + '</head>');
+      
+      res.send(htmlWithPrintStyles);
 
     } catch (error) {
       console.error("Error generating contract:", error);
