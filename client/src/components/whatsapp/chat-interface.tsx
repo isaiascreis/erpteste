@@ -46,7 +46,7 @@ interface Conversation {
   id: number;
   phone: string;
   name: string;
-  lastMessageAt?: string;
+  lastMessageTime?: string;  // Corrigido para coincidir com a API
   createdAt: string;
   lastMessage?: {
     content: string;
@@ -441,9 +441,9 @@ export function ChatInterface() {
                       <p className="font-medium text-foreground truncate" data-testid={`conversation-name-${conversation.id}`}>
                         {conversation.name}
                       </p>
-                      {conversation.lastMessageAt && (
+                      {conversation.lastMessageTime && (
                         <span className="text-xs text-muted-foreground" data-testid={`conversation-time-${conversation.id}`}>
-                          {formatLastMessageTime(conversation.lastMessageAt)}
+                          {formatLastMessageTime(conversation.lastMessageTime)}
                         </span>
                       )}
                     </div>
