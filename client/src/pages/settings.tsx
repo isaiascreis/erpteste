@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
-import { Settings as SettingsIcon, User, Building, Palette, Bell, Shield, LogOut, Users, Plus, Edit, Trash2, CreditCard } from "lucide-react";
+import { Settings as SettingsIcon, User, Building, Palette, Bell, Shield, LogOut, Users, Plus, Edit, Trash2, CreditCard, FileText } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,7 +16,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { insertPaymentMethodSchema, insertPaymentConditionSchema } from "@shared/schema";
+import { insertPaymentMethodSchema, insertPaymentConditionSchema, insertContractClauseSchema } from "@shared/schema";
 
 export default function Settings() {
   // TEMPORARIAMENTE REMOVIDO - Sistema sem login
@@ -29,6 +29,8 @@ export default function Settings() {
   const [editingPaymentMethod, setEditingPaymentMethod] = useState<any>(null);
   const [editingPaymentCondition, setEditingPaymentCondition] = useState<any>(null);
   const [selectedPaymentMethodForConditions, setSelectedPaymentMethodForConditions] = useState<number | null>(null);
+  const [showClauseForm, setShowClauseForm] = useState(false);
+  const [editingClause, setEditingClause] = useState<any>(null);
   const { toast } = useToast();
   
   // Usuário fictício para exibição temporária
@@ -75,6 +77,12 @@ export default function Settings() {
     enabled: activeSection === "payments",
   });
 
+  // Fetch contract clauses
+  const { data: contractClauses } = useQuery({
+    queryKey: ["/api/contract-clauses"],
+    enabled: activeSection === "clauses",
+  });
+
   // Forms for payment methods and conditions
   const paymentMethodForm = useForm({
     resolver: zodResolver(insertPaymentMethodSchema),
@@ -95,6 +103,17 @@ export default function Settings() {
       intervaloDias: 0,
       percentualEntrada: "0.00",
       ativo: true,
+    },
+  });
+
+  const clauseForm = useForm({
+    resolver: zodResolver(insertContractClauseSchema),
+    defaultValues: {
+      title: "",
+      content: "",
+      type: "contrato" as const,
+      order: 0,
+      isActive: true,
     },
   });
 
@@ -178,6 +197,46 @@ export default function Settings() {
     },
   });
 
+  // Mutations for contract clauses
+  const createClauseMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("/api/contract-clauses", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contract-clauses"] });
+      setShowClauseForm(false);
+      setEditingClause(null);
+      clauseForm.reset();
+      toast({ title: "Cláusula criada com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao criar cláusula", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateClauseMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/contract-clauses/${id}`, "PUT", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contract-clauses"] });
+      setShowClauseForm(false);
+      setEditingClause(null);
+      clauseForm.reset();
+      toast({ title: "Cláusula atualizada com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar cláusula", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteClauseMutation = useMutation({
+    mutationFn: (id: number) => apiRequest(`/api/contract-clauses/${id}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contract-clauses"] });
+      toast({ title: "Cláusula removida com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao remover cláusula", description: error.message, variant: "destructive" });
+    },
+  });
+
   // Handlers
   const handlePaymentMethodSubmit = (data: any) => {
     if (editingPaymentMethod) {
@@ -205,6 +264,20 @@ export default function Settings() {
     setEditingPaymentCondition(condition);
     paymentConditionForm.reset(condition);
     setShowPaymentConditionForm(true);
+  };
+
+  const handleClauseSubmit = (data: any) => {
+    if (editingClause) {
+      updateClauseMutation.mutate({ id: editingClause.id, data });
+    } else {
+      createClauseMutation.mutate(data);
+    }
+  };
+
+  const handleEditClause = (clause: any) => {
+    setEditingClause(clause);
+    clauseForm.reset(clause);
+    setShowClauseForm(true);
   };
 
   // Debug logging
@@ -287,6 +360,7 @@ export default function Settings() {
     { id: "company", label: "Empresa", icon: Building },
     { id: "sellers", label: "Vendedores", icon: Users },
     { id: "payments", label: "Formas de Pagamento", icon: CreditCard },
+    { id: "clauses", label: "Cláusulas", icon: FileText },
     { id: "appearance", label: "Aparência", icon: Palette },
     { id: "notifications", label: "Notificações", icon: Bell },
     { id: "security", label: "Segurança", icon: Shield },
@@ -682,6 +756,136 @@ export default function Settings() {
             </Card>
           )}
 
+          {activeSection === "clauses" && (
+            <Card data-testid="card-clauses">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <FileText className="w-5 h-5 mr-2" />
+                    Cláusulas Contratuais
+                  </div>
+                  <Button
+                    onClick={() => setShowClauseForm(true)}
+                    size="sm"
+                    data-testid="button-add-clause"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nova Cláusula
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Cláusulas de Contrato */}
+                  <div>
+                    <h4 className="font-medium mb-4 text-blue-700 dark:text-blue-400">
+                      📜 Cláusulas de Contrato
+                    </h4>
+                    <div className="space-y-3">
+                      {contractClauses?.filter((clause: any) => clause.type === "contrato").length > 0 ? (
+                        contractClauses?.filter((clause: any) => clause.type === "contrato").map((clause: any) => (
+                          <div key={clause.id} className="border rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20">
+                            <div className="flex items-center justify-between mb-2">
+                              <h5 className="font-medium">{clause.title}</h5>
+                              <div className="flex space-x-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => handleEditClause(clause)}
+                                  data-testid={`button-edit-clause-${clause.id}`}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="text-red-600"
+                                  onClick={() => deleteClauseMutation.mutate(clause.id)}
+                                  data-testid={`button-delete-clause-${clause.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground line-clamp-3">{clause.content}</p>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full">
+                                Ordem: {clause.order}
+                              </span>
+                              <span className={`text-xs px-2 py-1 rounded-full ${
+                                clause.isActive ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                              }`}>
+                                {clause.isActive ? 'Ativo' : 'Inativo'}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          Nenhuma cláusula de contrato configurada
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Cláusulas de Voucher */}
+                  <div>
+                    <h4 className="font-medium mb-4 text-green-700 dark:text-green-400">
+                      🎫 Cláusulas de Voucher
+                    </h4>
+                    <div className="space-y-3">
+                      {contractClauses?.filter((clause: any) => clause.type === "voucher").length > 0 ? (
+                        contractClauses?.filter((clause: any) => clause.type === "voucher").map((clause: any) => (
+                          <div key={clause.id} className="border rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
+                            <div className="flex items-center justify-between mb-2">
+                              <h5 className="font-medium">{clause.title}</h5>
+                              <div className="flex space-x-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => handleEditClause(clause)}
+                                  data-testid={`button-edit-voucher-clause-${clause.id}`}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="text-red-600"
+                                  onClick={() => deleteClauseMutation.mutate(clause.id)}
+                                  data-testid={`button-delete-voucher-clause-${clause.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground line-clamp-3">{clause.content}</p>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-1 rounded-full">
+                                Ordem: {clause.order}
+                              </span>
+                              <span className={`text-xs px-2 py-1 rounded-full ${
+                                clause.isActive ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                              }`}>
+                                {clause.isActive ? 'Ativo' : 'Inativo'}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          Nenhuma cláusula de voucher configurada
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {activeSection === "appearance" && (
             <Card data-testid="card-appearance">
               <CardHeader>
@@ -1038,6 +1242,154 @@ export default function Settings() {
                   data-testid="button-save-payment-condition"
                 >
                   {editingPaymentCondition ? "Atualizar" : "Criar"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Contract Clause Modal */}
+      <Dialog open={showClauseForm} onOpenChange={setShowClauseForm}>
+        <DialogContent className="max-w-3xl" data-testid="dialog-clause" aria-describedby="clause-description">
+          <DialogHeader>
+            <DialogTitle>
+              {editingClause ? "Editar Cláusula" : "Nova Cláusula"}
+            </DialogTitle>
+            <div id="clause-description" className="text-sm text-muted-foreground">
+              Configure cláusulas contratuais para contratos e vouchers de viagem.
+            </div>
+          </DialogHeader>
+          <Form {...clauseForm}>
+            <form onSubmit={clauseForm.handleSubmit(handleClauseSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={clauseForm.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Título *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Ex: Cancelamento de Viagem" data-testid="input-clause-title" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={clauseForm.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-clause-type">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="contrato">Contrato</SelectItem>
+                          <SelectItem value="voucher">Voucher</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={clauseForm.control}
+                  name="order"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ordem de Exibição</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          {...field} 
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                          placeholder="0"
+                          data-testid="input-clause-order" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={clauseForm.control}
+                  name="isActive"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 space-y-0">
+                      <div className="space-y-0.5">
+                        <FormLabel>Cláusula Ativa</FormLabel>
+                        <div className="text-sm text-muted-foreground">
+                          Incluir esta cláusula nos documentos
+                        </div>
+                      </div>
+                      <FormControl>
+                        <Button
+                          type="button"
+                          variant={field.value ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => field.onChange(!field.value)}
+                          data-testid="toggle-clause-active"
+                        >
+                          {field.value ? "Ativo" : "Inativo"}
+                        </Button>
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={clauseForm.control}
+                name="content"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Conteúdo da Cláusula *</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        {...field} 
+                        placeholder="Digite o texto completo da cláusula..."
+                        rows={8}
+                        className="resize-none"
+                        data-testid="textarea-clause-content" 
+                      />
+                    </FormControl>
+                    <div className="text-sm text-muted-foreground">
+                      💡 Dica: Use variáveis como {"{"}{"{"}{"}"}nomeCliente{"}"}{"}"},  {"{"}{"{"}{"}"}dataViagem{"}"}{"}"},  {"{"}{"{"}{"}"}valorTotal{"}"}{"}"}  para personalizar contratos
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={() => {
+                    setShowClauseForm(false);
+                    setEditingClause(null);
+                    clauseForm.reset();
+                  }}
+                  data-testid="button-cancel-clause"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createClauseMutation.isPending || updateClauseMutation.isPending}
+                  data-testid="button-save-clause"
+                >
+                  {editingClause ? "Atualizar" : "Criar"} Cláusula
                 </Button>
               </div>
             </form>
