@@ -1397,6 +1397,186 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                 </TabsList>
 
                 <TabsContent value="contratante" className="mt-6">
+                  {renderContratanteContent()}
+                </TabsContent>
+
+                <TabsContent value="servicos" className="mt-6">
+                  {renderServicosContent()}
+                </TabsContent>
+
+                <TabsContent value="vendedores" className="mt-6">
+                  {renderVendedoresContent()}
+                </TabsContent>
+
+                <TabsContent value="pagamentos" className="mt-6">
+                  {renderPagamentosContent()}
+                </TabsContent>
+
+                <TabsContent value="tarefas" className="mt-6">
+                  {renderTarefasContent()}
+                </TabsContent>
+              </Tabs>
+            ) : (
+              // Create Mode: Step-by-step Layout
+              <>
+                {step === 1 && renderContratanteContent()}
+                {step === 2 && renderServicosContent()}
+                {step === 3 && renderVendedoresContent()}
+                {step === 4 && renderPagamentosContent()}
+                {step === 5 && renderTarefasContent()}
+              </>
+            )}
+          </div>
+
+          {/* Summary Sidebar */}
+          <div className="space-y-6">
+            {/* Step Progress (only for create mode) */}
+            {!isEditMode && (
+              <Card data-testid="card-step-navigation">
+                <CardHeader>
+                  <CardTitle>Progresso</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {steps.map((stepItem) => (
+                    <div
+                      key={stepItem.id}
+                      className={`flex items-center space-x-3 p-2 rounded-lg ${
+                        step === stepItem.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
+                      }`}
+                    >
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                        step === stepItem.id ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                      }`}>
+                        {stepItem.id}
+                      </div>
+                      <span className="text-sm">{stepItem.name}</span>
+                      {step > stepItem.id && (
+                        <div className="ml-auto">
+                          <div className="w-4 h-4 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+                            <div className="text-green-600 dark:text-green-400 text-xs">✓</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Financial Summary */}
+            <Card data-testid="card-financial-summary">
+              <CardHeader>
+                <CardTitle>Resumo Financeiro</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Valor Total</span>
+                  <span className="financial-positive font-semibold" data-testid="text-total-value">
+                    R$ {totals.valorTotal.toLocaleString('pt-BR')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Custo Total</span>
+                  <span className="financial-negative font-semibold" data-testid="text-total-cost">
+                    R$ {totals.custoTotal.toLocaleString('pt-BR')}
+                  </span>
+                </div>
+                <div className="border-t border-border pt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">Lucro</span>
+                    <span className="text-emerald-600 font-bold text-lg" data-testid="text-profit">
+                      R$ {totals.lucro.toLocaleString('pt-BR')}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Margem: {totals.valorTotal ? ((totals.lucro / totals.valorTotal) * 100).toFixed(1) : 0}%
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              {!isEditMode && (
+                <>
+                  <div className="flex space-x-2">
+                    <Button
+                      onClick={() => setStep(Math.max(1, step - 1))}
+                      variant="outline"
+                      disabled={step === 1}
+                      className="flex-1"
+                      data-testid="button-previous"
+                    >
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Anterior
+                    </Button>
+                    <Button
+                      onClick={() => setStep(Math.min(5, step + 1))}
+                      variant="outline"
+                      disabled={step === 5}
+                      className="flex-1"
+                      data-testid="button-next"
+                    >
+                      Próximo
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
+                </>
+              )}
+              <Button
+                onClick={handleSaveSale}
+                variant="outline"
+                className="w-full"
+                disabled={createMutation.isPending || updateMutation.isPending}
+                data-testid="button-save"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {createMutation.isPending || updateMutation.isPending ? "Salvando..." : "Salvar"}
+              </Button>
+              {sale && sale.status === "venda" && (
+                <Button
+                  onClick={handleGenerateContract}
+                  variant="outline"
+                  className="w-full border-blue-600 text-blue-600 hover:bg-blue-50"
+                  disabled={generateContractMutation.isPending}
+                  data-testid="button-generate-contract"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  {generateContractMutation.isPending ? "Gerando..." : "Gerar Contrato PDF"}
+                </Button>
+              )}
+              <Button
+                onClick={handleConfirmSale}
+                variant="default"
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                disabled={createMutation.isPending || updateMutation.isPending || confirmSaleMutation.isPending || !sale}
+                data-testid="button-confirm-sale"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                {confirmSaleMutation.isPending ? "Confirmando..." : "Confirmar Venda"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Passenger Modal - With tabs for direct passenger or client search */}
+      <Dialog open={showPassengerModal} onOpenChange={setShowPassengerModal}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-passenger">}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Edit Mode: Tabs Layout */}
+            {isEditMode ? (
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-5">
+                  <TabsTrigger value="contratante" data-testid="tab-contratante">Contratante</TabsTrigger>
+                  <TabsTrigger value="servicos" data-testid="tab-servicos">Serviços</TabsTrigger>
+                  <TabsTrigger value="vendedores" data-testid="tab-vendedores">Vendedores</TabsTrigger>
+                  <TabsTrigger value="pagamentos" data-testid="tab-pagamentos">Pagamentos</TabsTrigger>
+                  <TabsTrigger value="tarefas" data-testid="tab-tarefas">Tarefas</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="contratante" className="mt-6">
                   {/* Contratante content */}
                   {renderContratanteContent()}
                 </TabsContent>
@@ -1426,209 +1606,155 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               <>
                 {/* Step 1: Client Selection */}
                 {step === 1 && renderContratanteContent()}
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium text-foreground">Buscar Contratante</label>
-                      <div className="relative mt-1">
-                        <Input
-                          type="text"
-                          placeholder="Digite o nome ou CPF do cliente..."
-                          value={searchClient}
-                          onChange={(e) => setSearchClient(e.target.value)}
-                          data-testid="input-search-client"
-                        />
-                      </div>
-                    </div>
+                
+                {/* Step 2: Services */}
+                {step === 2 && renderServicosContent()}
+                
+                {/* Step 3: Sellers */}
+                {step === 3 && renderVendedoresContent()}
+                
+                {/* Step 4: Payments */}
+                {step === 4 && renderPagamentosContent()}
+                
+                {/* Step 5: Requirements */}
+                {step === 5 && renderTarefasContent()}
+              </>
+            )}
+          </div>
 
-                    {/* Client List */}
-                    {searchClient && !selectedClient && (
-                      <div className="border rounded-md max-h-48 overflow-y-auto">
-                        {filteredClients.map((client) => (
-                          <div
-                            key={client.id}
-                            className="p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
-                            onClick={() => {
-                              setSelectedClient(client);
-                              setSearchClient("");
-                            }}
-                            data-testid={`client-option-${client.id}`}
-                          >
-                            <p className="font-medium">{client.nome}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {client.cpf && `CPF: ${client.cpf} • `}
-                              {client.email && `Email: ${client.email}`}
-                            </p>
-                          </div>
-                        ))}
+          {/* Summary Sidebar */}
+          <div className="space-y-6">
+            {/* Step Progress (only for create mode) */}
+            {!isEditMode && (
+              <Card data-testid="card-step-navigation">
+                <CardHeader>
+                  <CardTitle>Progresso</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {steps.map((stepItem) => (
+                    <div
+                      key={stepItem.id}
+                      className={`flex items-center space-x-3 p-2 rounded-lg ${
+                        step === stepItem.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
+                      }`}
+                    >
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                        step === stepItem.id ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                      }`}>
+                        {stepItem.id}
                       </div>
-                    )}
-
-                    {/* Selected Client */}
-                    {selectedClient && (
-                      <div className="bg-muted p-4 rounded-md" data-testid="selected-client">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium text-foreground">{selectedClient.nome}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {selectedClient.cpf && `CPF: ${selectedClient.cpf} • `}
-                              {selectedClient.email && `Email: ${selectedClient.email}`}
-                            </p>
-                            {selectedClient.telefone && (
-                              <p className="text-sm text-muted-foreground">
-                                Telefone: {selectedClient.telefone}
-                              </p>
-                            )}
+                      <span className="text-sm">{stepItem.name}</span>
+                      {step > stepItem.id && (
+                        <div className="ml-auto">
+                          <div className="w-4 h-4 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+                            <div className="text-green-600 dark:text-green-400 text-xs">✓</div>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedClient(null)}
-                            data-testid="button-clear-client"
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Passengers */}
-                <Card data-testid="card-passengers">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle>Passageiros</CardTitle>
-                      <Button 
-                        onClick={() => setShowPassengerModal(true)} 
-                        size="sm"
-                        data-testid="button-add-passenger"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Adicionar Passageiro
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {passengers.map((passenger) => (
-                        <div
-                          key={passenger.id}
-                          className="flex items-center justify-between p-4 border border-border rounded-lg"
-                          data-testid={`passenger-item-${passenger.id}`}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-medium">
-                              <User className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <div className="flex items-center space-x-2">
-                                <p className="font-medium text-foreground">{passenger.nome}</p>
-                                {passenger.funcao === "contratante" && (
-                                  <span className="bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 text-xs px-2 py-1 rounded-full">
-                                    👤 Contratante
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-sm text-muted-foreground">
-                                {passenger.dataNascimento && `Nascimento: ${passenger.dataNascimento}`}
-                                {passenger.cpf && ` • CPF: ${passenger.cpf}`}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditingItem(passenger);
-                                passengerForm.reset(passenger);
-                                setShowPassengerModal(true);
-                              }}
-                              data-testid={`button-edit-passenger-${passenger.id}`}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setPassengers(passengers.filter(p => p.id !== passenger.id))}
-                              data-testid={`button-delete-passenger-${passenger.id}`}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                      {passengers.length === 0 && (
-                        <div className="text-center py-8 text-muted-foreground" data-testid="no-passengers">
-                          <User className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                          <p>Nenhum passageiro adicionado</p>
                         </div>
                       )}
                     </div>
-                  </CardContent>
-                </Card>
-              </>
+                  ))}
+                </CardContent>
+              </Card>
             )}
 
-            {/* Step 2: Services */}
-            {step === 2 && (
-              <Card data-testid="card-services">
-                <CardHeader>
+            {/* Financial Summary */}
+            <Card data-testid="card-financial-summary">
+              <CardHeader>
+                <CardTitle>Resumo Financeiro</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Valor Total</span>
+                  <span className="financial-positive font-semibold" data-testid="text-total-value">
+                    R$ {totals.valorTotal.toLocaleString('pt-BR')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Custo Total</span>
+                  <span className="financial-negative font-semibold" data-testid="text-total-cost">
+                    R$ {totals.custoTotal.toLocaleString('pt-BR')}
+                  </span>
+                </div>
+                <div className="border-t border-border pt-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle>Serviços</CardTitle>
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        onClick={() => {
-                          serviceForm.reset({ ...serviceForm.getValues(), tipo: "aereo" });
-                          setShowServiceModal(true);
-                        }}
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700"
-                        data-testid="button-add-aereo"
-                      >
-                        <Plane className="w-4 h-4 mr-2" />
-                        Aéreo
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          serviceForm.reset({ ...serviceForm.getValues(), tipo: "hotel" });
-                          setShowServiceModal(true);
-                        }}
-                        size="sm"
-                        className="bg-green-600 hover:bg-green-700"
-                        data-testid="button-add-hotel"
-                      >
-                        <Bed className="w-4 h-4 mr-2" />
-                        Hotel
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          serviceForm.reset({ ...serviceForm.getValues(), tipo: "transfer" });
-                          setShowServiceModal(true);
-                        }}
-                        size="sm"
-                        className="bg-purple-600 hover:bg-purple-700"
-                        data-testid="button-add-transfer"
-                      >
-                        <Car className="w-4 h-4 mr-2" />
-                        Transfer
-                      </Button>
-                    </div>
+                    <span className="font-medium text-foreground">Lucro</span>
+                    <span className="text-emerald-600 font-bold text-lg" data-testid="text-profit">
+                      R$ {totals.lucro.toLocaleString('pt-BR')}
+                    </span>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {services.map((service) => (
-                      <div
-                        key={service.id}
-                        className="border border-border rounded-lg p-4"
-                        data-testid={`service-item-${service.id}`}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Margem: {totals.valorTotal ? ((totals.lucro / totals.valorTotal) * 100).toFixed(1) : 0}%
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              {!isEditMode && (
+                <>
+                  <div className="flex space-x-2">
+                    <Button
+                      onClick={() => setStep(Math.max(1, step - 1))}
+                      variant="outline"
+                      disabled={step === 1}
+                      className="flex-1"
+                      data-testid="button-previous"
+                    >
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Anterior
+                    </Button>
+                    <Button
+                      onClick={() => setStep(Math.min(5, step + 1))}
+                      variant="outline"
+                      disabled={step === 5}
+                      className="flex-1"
+                      data-testid="button-next"
+                    >
+                      Próximo
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
+                </>
+              )}
+              <Button
+                onClick={handleSaveSale}
+                variant="outline"
+                className="w-full"
+                disabled={createMutation.isPending || updateMutation.isPending}
+                data-testid="button-save"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {createMutation.isPending || updateMutation.isPending ? "Salvando..." : "Salvar"}
+              </Button>
+              {sale && sale.status === "venda" && (
+                <Button
+                  onClick={handleGenerateContract}
+                  variant="outline"
+                  className="w-full border-blue-600 text-blue-600 hover:bg-blue-50"
+                  disabled={generateContractMutation.isPending}
+                  data-testid="button-generate-contract"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  {generateContractMutation.isPending ? "Gerando..." : "Gerar Contrato PDF"}
+                </Button>
+              )}
+              <Button
+                onClick={handleConfirmSale}
+                variant="default"
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                disabled={createMutation.isPending || updateMutation.isPending || confirmSaleMutation.isPending || !sale}
+                data-testid="button-confirm-sale"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                {confirmSaleMutation.isPending ? "Confirmando..." : "Confirmar Venda"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Passenger Modal - With tabs for direct passenger or client search */}
                               service.tipo === 'aereo' ? 'bg-blue-100 dark:bg-blue-900' :
                               service.tipo === 'hotel' ? 'bg-green-100 dark:bg-green-900' :
                               service.tipo === 'transfer' ? 'bg-purple-100 dark:bg-purple-900' :
@@ -2090,6 +2216,16 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               {editingItem ? "Editar Passageiro" : "Adicionar Passageiro"}
             </DialogTitle>
           </DialogHeader>
+          <div className="space-y-4">
+            <p>Modal content will be implemented here</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Other modals will be implemented here */}
+    </div>
+  );
+}
           
           {/* Toggle between direct form and client search */}
           <div className="space-y-4">
