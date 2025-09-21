@@ -161,6 +161,25 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     queryKey: ["/api/bank-accounts"],
   });
 
+  // Fetch payment methods for both types
+  const { data: paymentMethodsAgencia } = useQuery({
+    queryKey: ["/api/payment-methods", "AGENCIA"],
+    queryFn: async () => {
+      const res = await fetch('/api/payment-methods?tipo=AGENCIA', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch payment methods for agency');
+      return await res.json();
+    },
+  });
+
+  const { data: paymentMethodsFornecedor } = useQuery({
+    queryKey: ["/api/payment-methods", "FORNECEDOR"], 
+    queryFn: async () => {
+      const res = await fetch('/api/payment-methods?tipo=FORNECEDOR', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch payment methods for supplier');
+      return await res.json();
+    },
+  });
+
   // Fetch requirements for existing sale
   const { data: saleRequirements } = useQuery({
     queryKey: ["/api/sales", sale?.id, "requirements"],
@@ -441,6 +460,16 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
       setPaymentPlans(sale.paymentPlans || []);
     }
   }, [sale]);
+
+  // Reset payment method when quemRecebe changes
+  useEffect(() => {
+    const subscription = paymentForm.watch((value, { name }) => {
+      if (name === "quemRecebe") {
+        paymentForm.setValue("formaPagamento", "");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [paymentForm]);
 
   const filteredClients = clients.filter(client =>
     client.nome.toLowerCase().includes(searchClient.toLowerCase()) ||
@@ -2272,15 +2301,38 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                 <FormField
                   control={paymentForm.control}
                   name="formaPagamento"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Forma de Pagamento *</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="PIX, Cartão, etc." data-testid="input-payment-method" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const currentQuemRecebe = paymentForm.watch("quemRecebe");
+                    const availablePaymentMethods = currentQuemRecebe === "AGENCIA" 
+                      ? paymentMethodsAgencia || [] 
+                      : paymentMethodsFornecedor || [];
+                    
+                    return (
+                      <FormItem>
+                        <FormLabel>Forma de Pagamento *</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value} data-testid="select-payment-method">
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione a forma de pagamento" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {availablePaymentMethods.map((method: any) => (
+                              <SelectItem key={method.id} value={method.nome}>
+                                {method.nome}
+                                {method.descricao && (
+                                  <span className="text-xs text-muted-foreground ml-2">
+                                    - {method.descricao}
+                                  </span>
+                                )}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
                 <FormField
                   control={paymentForm.control}
