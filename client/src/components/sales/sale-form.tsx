@@ -98,7 +98,7 @@ const paymentPlanSchema = z.object({
   dataPrevisaoPagamento: z.string().optional(),
   formaPagamento: z.string().min(1, "Forma de pagamento é obrigatória"),
   quemRecebe: z.enum(["AGENCIA", "FORNECEDOR"]),
-  passageiroPaganteId: z.string().optional(),
+  clientePaganteId: z.preprocess(v => (v === "" ? undefined : v), z.number().int().positive().optional()),
   contaBancariaId: z.string().optional(),
   valorPago: z.string().default("0"),
   observacoes: z.string().optional(),
@@ -256,7 +256,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
       dataPrevisaoPagamento: "",
       formaPagamento: "", 
       quemRecebe: "AGENCIA",
-      passageiroPaganteId: "",
+      clientePaganteId: undefined,
       contaBancariaId: "",
       valorPago: "0",
       observacoes: ""
@@ -2516,14 +2516,14 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={paymentForm.control}
-                  name="passageiroPaganteId"
+                  name="clientePaganteId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Passageiro Pagante</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormLabel>Cliente Pagante</FormLabel>
+                      <Select onValueChange={(value) => field.onChange(value ? Number(value) : undefined)} value={field.value != null ? String(field.value) : ""}>
                         <FormControl>
-                          <SelectTrigger data-testid="select-paying-passenger">
-                            <SelectValue placeholder="Selecione o passageiro" />
+                          <SelectTrigger data-testid="select-paying-client">
+                            <SelectValue placeholder="Selecione o cliente" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
