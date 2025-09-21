@@ -137,6 +137,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   const [salesSellers, setSalesSellers] = useState<any[]>([]);
   const [paymentPlans, setPaymentPlans] = useState<any[]>([]);
   const [requirements, setRequirements] = useState<any[]>([]);
+  const [servicePassengers, setServicePassengers] = useState<{[key: number]: {selected: boolean, valorCusto: string, valorVenda: string}}>({});
   const [showPassengerModal, setShowPassengerModal] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showSellerModal, setShowSellerModal] = useState(false);
@@ -486,6 +487,58 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   );
   totals.lucro = totals.valorTotal - totals.custoTotal;
 
+  // Calculate totals for service passengers
+  const calculateServiceTotals = (passengers: {[key: number]: {selected: boolean, valorCusto: string, valorVenda: string}}) => {
+    return Object.values(passengers).reduce(
+      (acc, passenger) => {
+        if (passenger.selected) {
+          acc.valorCusto += Number(passenger.valorCusto || 0);
+          acc.valorVenda += Number(passenger.valorVenda || 0);
+        }
+        return acc;
+      },
+      { valorCusto: 0, valorVenda: 0 }
+    );
+  };
+
+  // Update service form totals when service passengers change
+  const updateServiceTotals = () => {
+    const totals = calculateServiceTotals(servicePassengers);
+    serviceForm.setValue("valorCusto", totals.valorCusto.toFixed(2));
+    serviceForm.setValue("valorVenda", totals.valorVenda.toFixed(2));
+  };
+
+  // Handle passenger selection change
+  const handlePassengerSelectionChange = (passageiroId: number, checked: boolean) => {
+    setServicePassengers(prev => ({
+      ...prev,
+      [passageiroId]: {
+        ...prev[passageiroId],
+        selected: checked,
+        valorCusto: prev[passageiroId]?.valorCusto || "0",
+        valorVenda: prev[passageiroId]?.valorVenda || "0"
+      }
+    }));
+  };
+
+  // Handle passenger cost/sale value change
+  const handlePassengerValueChange = (passageiroId: number, field: 'valorCusto' | 'valorVenda', value: string) => {
+    setServicePassengers(prev => ({
+      ...prev,
+      [passageiroId]: {
+        ...prev[passageiroId],
+        selected: prev[passageiroId]?.selected || false,
+        valorCusto: field === 'valorCusto' ? value : (prev[passageiroId]?.valorCusto || "0"),
+        valorVenda: field === 'valorVenda' ? value : (prev[passageiroId]?.valorVenda || "0")
+      }
+    }));
+  };
+
+  // Update totals whenever servicePassengers changes
+  useEffect(() => {
+    updateServiceTotals();
+  }, [servicePassengers]);
+
   const handleAddPassenger = (data: PassengerFormData) => {
     if (editingItem) {
       setPassengers(passengers.map(p => p.id === editingItem.id ? { ...editingItem, ...data } : p));
@@ -511,6 +564,15 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
       const hotelDetails = hotelDetailsForm.getValues();
       serviceData.detalhes = hotelDetails;
     }
+
+    // Include selected passengers and their values
+    serviceData.servicePassengers = Object.entries(servicePassengers)
+      .filter(([_, data]) => data.selected)
+      .map(([passageiroId, data]) => ({
+        passageiroId: parseInt(passageiroId),
+        valorCusto: data.valorCusto,
+        valorVenda: data.valorVenda
+      }));
     
     if (editingItem) {
       setServices(services.map(s => s.id === editingItem.id ? { ...editingItem, ...serviceData } : s));
@@ -522,6 +584,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     serviceForm.reset();
     flightDetailsForm.reset();
     hotelDetailsForm.reset();
+    setServicePassengers({}); // Reset service passengers state
   };
 
   const handleAddSeller = (data: SellerFormData) => {
@@ -2154,6 +2217,75 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   </div>
                 </div>
               )}
+
+              {/* Seleção de Passageiros por Serviço */}
+              <div className="p-4 border border-border rounded-lg bg-blue-50 dark:bg-blue-950/20">
+                <h4 className="font-semibold text-foreground mb-4 flex items-center">
+                  👥 Passageiros que utilizarão este serviço
+                </h4>
+                {passengers.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    Adicione passageiros primeiro para poder selecioná-los para este serviço.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {passengers.map((passenger: any) => (
+                      <div key={passenger.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-white dark:bg-gray-800">
+                        <div className="flex items-center space-x-3">
+                          <input
+                            type="checkbox" 
+                            id={`passenger-${passenger.id}`}
+                            className="w-4 h-4 rounded border-border"
+                            checked={servicePassengers[passenger.id]?.selected || false}
+                            onChange={(e) => handlePassengerSelectionChange(passenger.id, e.target.checked)}
+                            data-testid={`checkbox-passenger-${passenger.id}`}
+                          />
+                          <label htmlFor={`passenger-${passenger.id}`} className="flex items-center space-x-2 cursor-pointer">
+                            <span className="font-medium">{passenger.nome}</span>
+                            {passenger.funcao === "contratante" && (
+                              <span className="bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 text-xs px-2 py-1 rounded-full">
+                                👤 Contratante
+                              </span>
+                            )}
+                          </label>
+                        </div>
+                        <div className="flex space-x-2">
+                          <div className="flex flex-col">
+                            <label className="text-xs text-muted-foreground mb-1">Custo</label>
+                            <Input
+                              type="number"
+                              placeholder="0,00"
+                              className="w-20 h-8 text-xs"
+                              step="0.01"
+                              value={servicePassengers[passenger.id]?.valorCusto || ""}
+                              onChange={(e) => handlePassengerValueChange(passenger.id, 'valorCusto', e.target.value)}
+                              disabled={!servicePassengers[passenger.id]?.selected}
+                              data-testid={`input-cost-${passenger.id}`}
+                            />
+                          </div>
+                          <div className="flex flex-col">
+                            <label className="text-xs text-muted-foreground mb-1">Venda</label>
+                            <Input
+                              type="number"
+                              placeholder="0,00"
+                              className="w-20 h-8 text-xs"
+                              step="0.01"
+                              value={servicePassengers[passenger.id]?.valorVenda || ""}
+                              onChange={(e) => handlePassengerValueChange(passenger.id, 'valorVenda', e.target.value)}
+                              disabled={!servicePassengers[passenger.id]?.selected}
+                              data-testid={`input-sale-${passenger.id}`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="text-xs text-muted-foreground mt-2">
+                      💡 Marque os passageiros que utilizarão este serviço e defina valores individuais se necessário.
+                      <br />O valor total será calculado automaticamente baseado nos passageiros selecionados.
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div className="flex justify-end space-x-2">
                 <Button 

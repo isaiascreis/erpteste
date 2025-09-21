@@ -190,6 +190,13 @@ export interface IStorage {
     financialAccount?: FinancialAccount;
     commission?: SaleCommission;
   }>;
+
+  // Service Passengers operations - Valores individuais por passageiro em cada serviço
+  getServicePassengers(serviceId: number): Promise<ServicePassenger[]>;
+  createServicePassenger(data: InsertServicePassenger): Promise<ServicePassenger>;
+  updateServicePassenger(id: number, data: Partial<InsertServicePassenger>): Promise<ServicePassenger>;
+  deleteServicePassenger(id: number): Promise<void>;
+  deleteServicePassengersByService(serviceId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2003,6 +2010,51 @@ export class DatabaseStorage implements IStorage {
         commission,
       };
     });
+  }
+
+  // Service Passengers operations - Valores individuais por passageiro em cada serviço
+  async getServicePassengers(serviceId: number): Promise<ServicePassenger[]> {
+    return await db
+      .select({
+        id: servicePassengers.id,
+        servicoId: servicePassengers.servicoId,
+        passageiroId: servicePassengers.passageiroId,
+        valorVenda: servicePassengers.valorVenda,
+        valorCusto: servicePassengers.valorCusto,
+      })
+      .from(servicePassengers)
+      .where(eq(servicePassengers.servicoId, serviceId));
+  }
+
+  async createServicePassenger(data: InsertServicePassenger): Promise<ServicePassenger> {
+    const [created] = await db
+      .insert(servicePassengers)
+      .values(data)
+      .returning();
+
+    return created;
+  }
+
+  async updateServicePassenger(id: number, data: Partial<InsertServicePassenger>): Promise<ServicePassenger> {
+    const [updated] = await db
+      .update(servicePassengers)
+      .set(data)
+      .where(eq(servicePassengers.id, id))
+      .returning();
+
+    return updated;
+  }
+
+  async deleteServicePassenger(id: number): Promise<void> {
+    await db
+      .delete(servicePassengers)
+      .where(eq(servicePassengers.id, id));
+  }
+
+  async deleteServicePassengersByService(serviceId: number): Promise<void> {
+    await db
+      .delete(servicePassengers)
+      .where(eq(servicePassengers.servicoId, serviceId));
   }
 }
 
