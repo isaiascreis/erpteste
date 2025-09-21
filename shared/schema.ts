@@ -200,7 +200,7 @@ export const financialAccounts = pgTable("financial_accounts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Payment Plans
+// Payment Plans - Sistema detalhado de pagamentos da venda
 export const paymentPlans = pgTable("payment_plans", {
   id: serial("id").primaryKey(),
   vendaId: integer("venda_id").references(() => sales.id).notNull(),
@@ -208,10 +208,64 @@ export const paymentPlans = pgTable("payment_plans", {
   valor: decimal("valor", { precision: 10, scale: 2 }).notNull(),
   dataVencimento: timestamp("data_vencimento").notNull(),
   formaPagamento: varchar("forma_pagamento", { length: 50 }),
-  quemRecebe: varchar("quem_recebe", { length: 50 }), // AGENCIA ou FORNECEDOR
+  quemRecebe: varchar("quem_recebe", { length: 50 }).notNull(), // AGENCIA ou FORNECEDOR
   status: paymentStatusEnum("status").default("pendente"),
-  contaId: integer("conta_id").references(() => financialAccounts.id),
+  dataLiquidacao: timestamp("data_liquidacao"),
+  valorLiquidado: decimal("valor_liquidado", { precision: 10, scale: 2 }).default("0.00"),
+  contaBancariaId: integer("conta_bancaria_id").references(() => bankAccounts.id),
+  observacoes: text("observacoes"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Sale Requirements/Tasks - Tarefas e exigências da venda
+export const saleRequirements = pgTable("sale_requirements", {
+  id: serial("id").primaryKey(),
+  vendaId: integer("venda_id").references(() => sales.id).notNull(),
+  tipo: varchar("tipo", { length: 50 }).notNull(), // checkin, envio_cartinha, documentos, etc
+  descricao: text("descricao").notNull(),
+  dataVencimento: timestamp("data_vencimento"),
+  responsavelId: varchar("responsavel_id").references(() => users.id),
+  status: varchar("status", { length: 20 }).default("pendente"), // pendente, em_andamento, concluida
+  prioridade: varchar("prioridade", { length: 20 }).default("normal"), // baixa, normal, alta, urgente
+  observacoes: text("observacoes"),
+  dataConclusao: timestamp("data_conclusao"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Sale Commissions - Controle detalhado de comissões
+export const saleCommissions = pgTable("sale_commissions", {
+  id: serial("id").primaryKey(),
+  vendaId: integer("venda_id").references(() => sales.id).notNull(),
+  vendedorId: integer("vendedor_id").references(() => sellers.id),
+  userId: varchar("user_id").references(() => users.id), // Para vendedores do sistema
+  tipo: varchar("tipo", { length: 50 }).notNull(), // vendedor, fornecedor
+  percentual: decimal("percentual", { precision: 5, scale: 2 }).notNull(),
+  valorComissao: decimal("valor_comissao", { precision: 10, scale: 2 }).notNull(),
+  dataPrevisaoRecebimento: timestamp("data_previsao_recebimento"),
+  status: varchar("status", { length: 20 }).default("a_receber"), // a_receber, recebida
+  dataRecebimento: timestamp("data_recebimento"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Notifications - Sistema de notificações
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  tipo: varchar("tipo", { length: 50 }).notNull(), // comissao, tarefa, sistema
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  vendaId: integer("venda_id").references(() => sales.id),
+  requirementId: integer("requirement_id").references(() => saleRequirements.id),
+  commissionId: integer("commission_id").references(() => saleCommissions.id),
+  lida: boolean("lida").default(false),
+  dataVencimento: timestamp("data_vencimento"),
+  prioridade: varchar("prioridade", { length: 20 }).default("normal"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Bank Transactions
@@ -317,6 +371,9 @@ export const salesRelations = relations(sales, ({ one, many }) => ({
   saleSellers: many(saleSellers),
   financialAccounts: many(financialAccounts),
   paymentPlans: many(paymentPlans),
+  requirements: many(saleRequirements),
+  commissions: many(saleCommissions),
+  notifications: many(notifications),
 }));
 
 export const passengersRelations = relations(passengers, ({ one, many }) => ({
@@ -394,9 +451,9 @@ export const paymentPlansRelations = relations(paymentPlans, ({ one }) => ({
     fields: [paymentPlans.vendaId],
     references: [sales.id],
   }),
-  account: one(financialAccounts, {
-    fields: [paymentPlans.contaId],
-    references: [financialAccounts.id],
+  bankAccount: one(bankAccounts, {
+    fields: [paymentPlans.contaBancariaId],
+    references: [bankAccounts.id],
   }),
 }));
 
@@ -434,6 +491,51 @@ export const whatsappMessagesRelations = relations(whatsappMessages, ({ one }) =
   }),
 }));
 
+export const saleRequirementsRelations = relations(saleRequirements, ({ one }) => ({
+  sale: one(sales, {
+    fields: [saleRequirements.vendaId],
+    references: [sales.id],
+  }),
+  responsible: one(users, {
+    fields: [saleRequirements.responsavelId],
+    references: [users.id],
+  }),
+}));
+
+export const saleCommissionsRelations = relations(saleCommissions, ({ one }) => ({
+  sale: one(sales, {
+    fields: [saleCommissions.vendaId],
+    references: [sales.id],
+  }),
+  seller: one(sellers, {
+    fields: [saleCommissions.vendedorId],
+    references: [sellers.id],
+  }),
+  user: one(users, {
+    fields: [saleCommissions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  sale: one(sales, {
+    fields: [notifications.vendaId],
+    references: [sales.id],
+  }),
+  requirement: one(saleRequirements, {
+    fields: [notifications.requirementId],
+    references: [saleRequirements.id],
+  }),
+  commission: one(saleCommissions, {
+    fields: [notifications.commissionId],
+    references: [saleCommissions.id],
+  }),
+}));
+
 // Insert Schemas
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSupplierSchema = createInsertSchema(suppliers).omit({ id: true, createdAt: true, updatedAt: true });
@@ -448,7 +550,21 @@ export const insertAccountCategorySchema = createInsertSchema(accountCategories)
 export const insertFinancialAccountSchema = createInsertSchema(financialAccounts).omit({ id: true, createdAt: true, updatedAt: true }).extend({
   dataVencimento: z.string().optional().transform(val => val ? new Date(val) : undefined),
 });
-export const insertPaymentPlanSchema = createInsertSchema(paymentPlans).omit({ id: true, createdAt: true });
+export const insertPaymentPlanSchema = createInsertSchema(paymentPlans).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  dataVencimento: z.string().transform(val => new Date(val)),
+  dataLiquidacao: z.string().optional().transform(val => val ? new Date(val) : undefined),
+});
+export const insertSaleRequirementSchema = createInsertSchema(saleRequirements).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  dataVencimento: z.string().optional().transform(val => val ? new Date(val) : undefined),
+  dataConclusao: z.string().optional().transform(val => val ? new Date(val) : undefined),
+});
+export const insertSaleCommissionSchema = createInsertSchema(saleCommissions).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  dataPrevisaoRecebimento: z.string().optional().transform(val => val ? new Date(val) : undefined),
+  dataRecebimento: z.string().optional().transform(val => val ? new Date(val) : undefined),
+});
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  dataVencimento: z.string().optional().transform(val => val ? new Date(val) : undefined),
+});
 export const insertBankTransactionSchema = createInsertSchema(bankTransactions).omit({ id: true, createdAt: true });
 export const insertUserPermissionSchema = createInsertSchema(userPermissions).omit({ id: true, createdAt: true });
 export const insertWhatsappConversationSchema = createInsertSchema(whatsappConversations).omit({ id: true, createdAt: true, updatedAt: true });
@@ -493,3 +609,9 @@ export type WhatsappConversation = typeof whatsappConversations.$inferSelect;
 export type InsertWhatsappConversation = z.infer<typeof insertWhatsappConversationSchema>;
 export type WhatsappMessage = typeof whatsappMessages.$inferSelect;
 export type InsertWhatsappMessage = z.infer<typeof insertWhatsappMessageSchema>;
+export type SaleRequirement = typeof saleRequirements.$inferSelect;
+export type InsertSaleRequirement = z.infer<typeof insertSaleRequirementSchema>;
+export type SaleCommission = typeof saleCommissions.$inferSelect;
+export type InsertSaleCommission = z.infer<typeof insertSaleCommissionSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
