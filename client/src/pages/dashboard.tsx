@@ -302,7 +302,7 @@ export default function Dashboard() {
               onClick={() => setLocation('/financial')}
               data-testid="button-financial"
             >
-              <div className="w-12 h-12 bg-emerald-500 rounded-lg flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+              <div className="w-12 h-12 bg-[hsl(var(--primary))] rounded-lg flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
                 <DollarSign className="text-white w-6 h-6" />
               </div>
               <p className="font-medium text-foreground">Financeiro</p>

@@ -17,6 +17,7 @@ import {
   X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import mondialLogo from "@/assets/mondial-turismo-logo.png";
 
 export function Sidebar() {
   const [location] = useLocation();
@@ -67,11 +68,16 @@ export function Sidebar() {
         <div className="p-6 border-b border-sidebar-border">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <Plane className="text-primary-foreground text-lg w-5 h-5" />
+              <div className="flex items-center justify-center">
+                <img 
+                  src={mondialLogo} 
+                  alt="Mondial Turismo"
+                  className="h-8 w-auto object-contain" 
+                  data-testid="logo-mondial-turismo"
+                />
               </div>
               <div>
-                <h1 className="text-lg font-semibold text-sidebar-foreground" data-testid="text-app-title">
+                <h1 className="text-lg font-semibold text-sidebar-foreground sr-only" data-testid="text-app-title">
                   Mondial Turismo
                 </h1>
                 <p className="text-sm text-muted-foreground">Sistema ERP</p>
@@ -102,7 +108,7 @@ export function Sidebar() {
                   <Icon className="w-5 h-5 mr-3" />
                   {item.name}
                   {item.name === "WhatsApp" && (
-                    <span className="ml-auto w-2 h-2 bg-emerald-500 rounded-full animate-pulse" data-testid="whatsapp-status"></span>
+                    <span className="ml-auto w-2 h-2 bg-[hsl(var(--secondary))] rounded-full animate-pulse" data-testid="whatsapp-status"></span>
                   )}
                 </Button>
               </Link>

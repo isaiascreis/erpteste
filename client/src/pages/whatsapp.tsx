@@ -190,7 +190,7 @@ export default function WhatsApp() {
       case "connected":
         return (
           <Badge className="bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse mr-2"></div>
+            <div className="w-2 h-2 bg-[hsl(var(--secondary))] rounded-full animate-pulse mr-2"></div>
             Conectado
           </Badge>
         );
