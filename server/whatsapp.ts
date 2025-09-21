@@ -317,13 +317,26 @@ class WhatsAppIntegration {
         throw new Error('Cliente WhatsApp não está conectado - ' + this.clientStatus);
       }
 
-      // Formatar número de telefone para Baileys
-      const formattedPhone = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`;
+      // Normalizar e formatar número de telefone para Baileys
+      let normalizedPhone = phone;
+      
+      // Remover formatos antigos ou inconsistentes
+      if (phone.includes('@c.us')) {
+        normalizedPhone = phone.replace('@c.us', '');
+      } else if (phone.includes('@s.whatsapp.net')) {
+        normalizedPhone = phone.replace('@s.whatsapp.net', '');
+      }
+      
+      // Remover caracteres não numéricos exceto +
+      normalizedPhone = normalizedPhone.replace(/[^\d+]/g, '');
+      
+      // Formatar para o padrão correto do Baileys
+      const formattedPhone = `${normalizedPhone}@s.whatsapp.net`;
       
       await this.sock.sendMessage(formattedPhone, { text: message });
       this.lastActivity = new Date();
       
-      console.log(`[BAILEYS ENVIO] ✅ Mensagem enviada para ${phone}`);
+      console.log(`[BAILEYS ENVIO] ✅ Mensagem enviada para ${formattedPhone} (original: ${phone})`);
       return true;
 
     } catch (error) {
