@@ -34,6 +34,7 @@ const passengerSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
   cpf: z.string().optional(),
   dataNascimento: z.string().optional(),
+  funcao: z.enum(["passageiro", "contratante"]).default("passageiro"),
   observacoes: z.string().optional(),
 });
 
@@ -94,8 +95,13 @@ const paymentPlanSchema = z.object({
   descricao: z.string().min(1, "Descrição é obrigatória"),
   valor: z.string().min(1, "Valor é obrigatório"),
   dataVencimento: z.string().min(1, "Data de vencimento é obrigatória"),
+  dataPrevisaoPagamento: z.string().optional(),
   formaPagamento: z.string().min(1, "Forma de pagamento é obrigatória"),
   quemRecebe: z.enum(["AGENCIA", "FORNECEDOR"]),
+  passageiroPaganteId: z.string().optional(),
+  contaBancariaId: z.string().optional(),
+  valorPago: z.string().default("0"),
+  observacoes: z.string().optional(),
 });
 
 // Import requirement schema from shared types
@@ -150,6 +156,11 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     queryKey: ["/api/sellers"],
   });
 
+  // Fetch bank accounts
+  const { data: bankAccounts } = useQuery({
+    queryKey: ["/api/bank-accounts"],
+  });
+
   // Fetch requirements for existing sale
   const { data: saleRequirements } = useQuery({
     queryKey: ["/api/sales", sale?.id, "requirements"],
@@ -165,7 +176,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
   const passengerForm = useForm<PassengerFormData>({
     resolver: zodResolver(passengerSchema),
-    defaultValues: { nome: "", cpf: "", dataNascimento: "", observacoes: "" },
+    defaultValues: { nome: "", cpf: "", dataNascimento: "", funcao: "passageiro", observacoes: "" },
   });
 
   const serviceForm = useForm<ServiceFormData>({
@@ -222,8 +233,13 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
       descricao: "", 
       valor: "", 
       dataVencimento: "", 
+      dataPrevisaoPagamento: "",
       formaPagamento: "", 
-      quemRecebe: "AGENCIA" 
+      quemRecebe: "AGENCIA",
+      passageiroPaganteId: "",
+      contaBancariaId: "",
+      valorPago: "0",
+      observacoes: ""
     },
   });
 
@@ -785,7 +801,14 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                               <User className="w-5 h-5" />
                             </div>
                             <div>
-                              <p className="font-medium text-foreground">{passenger.nome}</p>
+                              <div className="flex items-center space-x-2">
+                                <p className="font-medium text-foreground">{passenger.nome}</p>
+                                {passenger.funcao === "contratante" && (
+                                  <span className="bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 text-xs px-2 py-1 rounded-full">
+                                    👤 Contratante
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-sm text-muted-foreground">
                                 {passenger.dataNascimento && `Nascimento: ${passenger.dataNascimento}`}
                                 {passenger.cpf && ` • CPF: ${passenger.cpf}`}
@@ -1349,7 +1372,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <FormField
                   control={passengerForm.control}
                   name="cpf"
@@ -1359,6 +1382,27 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                       <FormControl>
                         <Input {...field} data-testid="input-passenger-cpf" />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={passengerForm.control}
+                  name="funcao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Função *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || "passageiro"}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-passenger-role">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="passageiro">🧳 Passageiro</SelectItem>
+                          <SelectItem value="contratante">👤 Contratante</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -2260,6 +2304,119 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   )}
                 />
               </div>
+              
+              {/* Nova seção com campos adicionais */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={paymentForm.control}
+                  name="dataPrevisaoPagamento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Previsão de Pagamento</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-payment-preview-date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={paymentForm.control}
+                  name="contaBancariaId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Conta Bancária</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-bank-account">
+                            <SelectValue placeholder="Selecione uma conta" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {bankAccounts?.map((account: any) => (
+                            <SelectItem key={account.id} value={account.id.toString()}>
+                              {account.nome} - {account.banco}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={paymentForm.control}
+                  name="passageiroPaganteId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Passageiro Pagante</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-paying-passenger">
+                            <SelectValue placeholder="Selecione o passageiro" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {passengers?.map((passenger: any) => (
+                            <SelectItem key={passenger.id} value={passenger.id.toString()}>
+                              {passenger.nome} {passenger.funcao === "contratante" && "(👤 Contratante)"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={paymentForm.control}
+                  name="valorPago"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Valor Pago</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          {...field} 
+                          data-testid="input-payment-paid" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={paymentForm.control}
+                name="observacoes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observações</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} rows={3} data-testid="input-payment-observations" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Calcular e exibir saldo em aberto */}
+              {paymentForm.watch("valor") && paymentForm.watch("valorPago") && (
+                <div className="bg-muted p-4 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Saldo em Aberto:</span>
+                    <span className="text-lg font-bold text-orange-600">
+                      R$ {(Number(paymentForm.watch("valor") || 0) - Number(paymentForm.watch("valorPago") || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end space-x-2">
                 <Button 
                   type="button" 

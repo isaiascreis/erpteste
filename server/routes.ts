@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from 'ws';
 import { storage } from "./storage";
 import { setupSimpleAuth, isAuthenticated } from "./simpleAuth";
-import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema, insertSaleRequirementSchema, insertSaleCommissionSchema, insertNotificationSchema, insertPaymentPlanSchema } from "@shared/schema";
+import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema, insertSaleRequirementSchema, insertSaleCommissionSchema, insertNotificationSchema, insertPaymentPlanSchema, insertPaymentMethodSchema, insertPaymentConditionSchema } from "@shared/schema";
 import { z } from "zod";
 import { WhatsAppAPI, whatsappIntegration } from "./whatsapp";
 
@@ -632,6 +632,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting payment plan:", error);
       res.status(500).json({ message: "Failed to delete payment plan" });
+    }
+  });
+
+  // Payment methods routes
+  app.get('/api/payment-methods', isAuthenticated, async (req, res) => {
+    try {
+      const { tipo } = req.query;
+      const paymentMethods = await storage.getPaymentMethods(tipo as "AGENCIA" | "FORNECEDOR" | undefined);
+      res.json(paymentMethods);
+    } catch (error) {
+      console.error("Error fetching payment methods:", error);
+      res.status(500).json({ message: "Failed to fetch payment methods" });
+    }
+  });
+
+  app.post('/api/payment-methods', isAuthenticated, async (req, res) => {
+    try {
+      const paymentMethodData = insertPaymentMethodSchema.parse(req.body);
+      const paymentMethod = await storage.createPaymentMethod(paymentMethodData);
+      res.json(paymentMethod);
+    } catch (error) {
+      console.error("Error creating payment method:", error);
+      res.status(500).json({ message: "Failed to create payment method" });
+    }
+  });
+
+  app.put('/api/payment-methods/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid payment method ID" });
+      }
+      const updateData = req.body;
+      const paymentMethod = await storage.updatePaymentMethod(id, updateData);
+      res.json(paymentMethod);
+    } catch (error) {
+      console.error("Error updating payment method:", error);
+      res.status(500).json({ message: "Failed to update payment method" });
+    }
+  });
+
+  app.delete('/api/payment-methods/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid payment method ID" });
+      }
+      await storage.deletePaymentMethod(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting payment method:", error);
+      res.status(500).json({ message: "Failed to delete payment method" });
+    }
+  });
+
+  // Payment conditions routes
+  app.get('/api/payment-conditions', isAuthenticated, async (req, res) => {
+    try {
+      const { formaPagamentoId } = req.query;
+      const paymentConditions = await storage.getPaymentConditions(
+        formaPagamentoId ? parseInt(formaPagamentoId as string) : undefined
+      );
+      res.json(paymentConditions);
+    } catch (error) {
+      console.error("Error fetching payment conditions:", error);
+      res.status(500).json({ message: "Failed to fetch payment conditions" });
+    }
+  });
+
+  app.post('/api/payment-conditions', isAuthenticated, async (req, res) => {
+    try {
+      const paymentConditionData = insertPaymentConditionSchema.parse(req.body);
+      const paymentCondition = await storage.createPaymentCondition(paymentConditionData);
+      res.json(paymentCondition);
+    } catch (error) {
+      console.error("Error creating payment condition:", error);
+      res.status(500).json({ message: "Failed to create payment condition" });
+    }
+  });
+
+  app.put('/api/payment-conditions/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid payment condition ID" });
+      }
+      const updateData = req.body;
+      const paymentCondition = await storage.updatePaymentCondition(id, updateData);
+      res.json(paymentCondition);
+    } catch (error) {
+      console.error("Error updating payment condition:", error);
+      res.status(500).json({ message: "Failed to update payment condition" });
+    }
+  });
+
+  app.delete('/api/payment-conditions/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid payment condition ID" });
+      }
+      await storage.deletePaymentCondition(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting payment condition:", error);
+      res.status(500).json({ message: "Failed to delete payment condition" });
     }
   });
 

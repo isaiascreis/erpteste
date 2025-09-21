@@ -12,6 +12,8 @@ import {
   accountCategories,
   financialAccounts,
   paymentPlans,
+  paymentMethods,
+  paymentConditions,
   bankTransactions,
   whatsappConversations,
   whatsappMessages,
@@ -44,6 +46,10 @@ import {
   type InsertFinancialAccount,
   type PaymentPlan,
   type InsertPaymentPlan,
+  type PaymentMethod,
+  type InsertPaymentMethod,
+  type PaymentCondition,
+  type InsertPaymentCondition,
   type BankTransaction,
   type InsertBankTransaction,
   type InsertUser,
@@ -161,6 +167,18 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   markNotificationAsRead(id: number, userId?: string): Promise<Notification>;
   deleteNotification(id: number): Promise<void>;
+
+  // Payment methods operations  
+  getPaymentMethods(tipo?: "AGENCIA" | "FORNECEDOR"): Promise<PaymentMethod[]>;
+  createPaymentMethod(data: InsertPaymentMethod): Promise<PaymentMethod>;
+  updatePaymentMethod(id: number, data: Partial<InsertPaymentMethod>): Promise<PaymentMethod>;
+  deletePaymentMethod(id: number): Promise<void>;
+
+  // Payment conditions operations
+  getPaymentConditions(formaPagamentoId?: number): Promise<PaymentCondition[]>;
+  createPaymentCondition(data: InsertPaymentCondition): Promise<PaymentCondition>;
+  updatePaymentCondition(id: number, data: Partial<InsertPaymentCondition>): Promise<PaymentCondition>;
+  deletePaymentCondition(id: number): Promise<void>;
 
   // Enhanced payment operations with financial sync
   getPaymentPlans(saleId?: number): Promise<PaymentPlan[]>;
@@ -1540,6 +1558,84 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(notifications)
       .where(eq(notifications.id, id));
+  }
+
+  // Payment methods operations
+  async getPaymentMethods(tipo?: "AGENCIA" | "FORNECEDOR"): Promise<PaymentMethod[]> {
+    const query = db.select().from(paymentMethods);
+    
+    if (tipo) {
+      return await query.where(and(
+        eq(paymentMethods.tipo, tipo),
+        eq(paymentMethods.ativo, true)
+      )).orderBy(asc(paymentMethods.nome));
+    }
+    
+    return await query.where(eq(paymentMethods.ativo, true)).orderBy(asc(paymentMethods.nome));
+  }
+
+  async createPaymentMethod(data: InsertPaymentMethod): Promise<PaymentMethod> {
+    const [created] = await db
+      .insert(paymentMethods)
+      .values(data)
+      .returning();
+    return created;
+  }
+
+  async updatePaymentMethod(id: number, data: Partial<InsertPaymentMethod>): Promise<PaymentMethod> {
+    const [updated] = await db
+      .update(paymentMethods)
+      .set(data)
+      .where(eq(paymentMethods.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePaymentMethod(id: number): Promise<void> {
+    // Soft delete - mark as inactive
+    await db
+      .update(paymentMethods)
+      .set({ ativo: false })
+      .where(eq(paymentMethods.id, id));
+  }
+
+  // Payment conditions operations
+  async getPaymentConditions(formaPagamentoId?: number): Promise<PaymentCondition[]> {
+    const query = db.select().from(paymentConditions);
+    
+    if (formaPagamentoId) {
+      return await query.where(and(
+        eq(paymentConditions.formaPagamentoId, formaPagamentoId),
+        eq(paymentConditions.ativo, true)
+      )).orderBy(asc(paymentConditions.nome));
+    }
+    
+    return await query.where(eq(paymentConditions.ativo, true)).orderBy(asc(paymentConditions.nome));
+  }
+
+  async createPaymentCondition(data: InsertPaymentCondition): Promise<PaymentCondition> {
+    const [created] = await db
+      .insert(paymentConditions)
+      .values(data)
+      .returning();
+    return created;
+  }
+
+  async updatePaymentCondition(id: number, data: Partial<InsertPaymentCondition>): Promise<PaymentCondition> {
+    const [updated] = await db
+      .update(paymentConditions)
+      .set(data)
+      .where(eq(paymentConditions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePaymentCondition(id: number): Promise<void> {
+    // Soft delete - mark as inactive
+    await db
+      .update(paymentConditions)
+      .set({ ativo: false })
+      .where(eq(paymentConditions.id, id));
   }
 
   // Enhanced payment operations with financial sync

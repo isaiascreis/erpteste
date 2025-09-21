@@ -8,9 +8,15 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
-import { Settings as SettingsIcon, User, Building, Palette, Bell, Shield, LogOut, Users, Plus, Edit, Trash2 } from "lucide-react";
+import { Settings as SettingsIcon, User, Building, Palette, Bell, Shield, LogOut, Users, Plus, Edit, Trash2, CreditCard } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { insertPaymentMethodSchema, insertPaymentConditionSchema } from "@shared/schema";
 
 export default function Settings() {
   // TEMPORARIAMENTE REMOVIDO - Sistema sem login
@@ -18,6 +24,11 @@ export default function Settings() {
   const [activeSection, setActiveSection] = useState("profile");
   const [showSellerForm, setShowSellerForm] = useState(false);
   const [editingSeller, setEditingSeller] = useState(null);
+  const [showPaymentMethodForm, setShowPaymentMethodForm] = useState(false);
+  const [showPaymentConditionForm, setShowPaymentConditionForm] = useState(false);
+  const [editingPaymentMethod, setEditingPaymentMethod] = useState<any>(null);
+  const [editingPaymentCondition, setEditingPaymentCondition] = useState<any>(null);
+  const [selectedPaymentMethodForConditions, setSelectedPaymentMethodForConditions] = useState<number | null>(null);
   const { toast } = useToast();
   
   // Usuário fictício para exibição temporária
@@ -36,6 +47,165 @@ export default function Settings() {
       return await res.json();
     },
   });
+
+  // Fetch payment methods 
+  const { data: paymentMethodsAgencia } = useQuery({
+    queryKey: ["/api/payment-methods", "AGENCIA"],
+    enabled: activeSection === "payments",
+    queryFn: async () => {
+      const res = await fetch('/api/payment-methods?tipo=AGENCIA', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch payment methods for agency');
+      return await res.json();
+    },
+  });
+
+  const { data: paymentMethodsFornecedor } = useQuery({
+    queryKey: ["/api/payment-methods", "FORNECEDOR"], 
+    enabled: activeSection === "payments",
+    queryFn: async () => {
+      const res = await fetch('/api/payment-methods?tipo=FORNECEDOR', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch payment methods for supplier');
+      return await res.json();
+    },
+  });
+
+  // Fetch payment conditions
+  const { data: paymentConditions } = useQuery({
+    queryKey: ["/api/payment-conditions"],
+    enabled: activeSection === "payments",
+  });
+
+  // Forms for payment methods and conditions
+  const paymentMethodForm = useForm({
+    resolver: zodResolver(insertPaymentMethodSchema),
+    defaultValues: {
+      nome: "",
+      tipo: "AGENCIA" as const,
+      descricao: "",
+      ativo: true,
+    },
+  });
+
+  const paymentConditionForm = useForm({
+    resolver: zodResolver(insertPaymentConditionSchema),
+    defaultValues: {
+      formaPagamentoId: 0,
+      nome: "",
+      parcelas: 1,
+      intervaloDias: 0,
+      percentualEntrada: "0.00",
+      ativo: true,
+    },
+  });
+
+  // Mutations for payment methods
+  const createPaymentMethodMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("/api/payment-methods", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
+      setShowPaymentMethodForm(false);
+      setEditingPaymentMethod(null);
+      paymentMethodForm.reset();
+      toast({ title: "Forma de pagamento criada com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao criar forma de pagamento", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updatePaymentMethodMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/payment-methods/${id}`, "PUT", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
+      setShowPaymentMethodForm(false);
+      setEditingPaymentMethod(null);
+      paymentMethodForm.reset();
+      toast({ title: "Forma de pagamento atualizada com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar forma de pagamento", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deletePaymentMethodMutation = useMutation({
+    mutationFn: (id: number) => apiRequest(`/api/payment-methods/${id}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
+      toast({ title: "Forma de pagamento removida com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao remover forma de pagamento", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Mutations for payment conditions
+  const createPaymentConditionMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("/api/payment-conditions", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payment-conditions"] });
+      setShowPaymentConditionForm(false);
+      setEditingPaymentCondition(null);
+      paymentConditionForm.reset();
+      toast({ title: "Condição de pagamento criada com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao criar condição de pagamento", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updatePaymentConditionMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/payment-conditions/${id}`, "PUT", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payment-conditions"] });
+      setShowPaymentConditionForm(false);
+      setEditingPaymentCondition(null);
+      paymentConditionForm.reset();
+      toast({ title: "Condição de pagamento atualizada com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar condição de pagamento", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deletePaymentConditionMutation = useMutation({
+    mutationFn: (id: number) => apiRequest(`/api/payment-conditions/${id}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payment-conditions"] });
+      toast({ title: "Condição de pagamento removida com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao remover condição de pagamento", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Handlers
+  const handlePaymentMethodSubmit = (data: any) => {
+    if (editingPaymentMethod) {
+      updatePaymentMethodMutation.mutate({ id: editingPaymentMethod.id, data });
+    } else {
+      createPaymentMethodMutation.mutate(data);
+    }
+  };
+
+  const handlePaymentConditionSubmit = (data: any) => {
+    if (editingPaymentCondition) {
+      updatePaymentConditionMutation.mutate({ id: editingPaymentCondition.id, data });
+    } else {
+      createPaymentConditionMutation.mutate(data);
+    }
+  };
+
+  const handleEditPaymentMethod = (method: any) => {
+    setEditingPaymentMethod(method);
+    paymentMethodForm.reset(method);
+    setShowPaymentMethodForm(true);
+  };
+
+  const handleEditPaymentCondition = (condition: any) => {
+    setEditingPaymentCondition(condition);
+    paymentConditionForm.reset(condition);
+    setShowPaymentConditionForm(true);
+  };
 
   // Debug logging
   if (activeSection === "sellers") {
@@ -116,6 +286,7 @@ export default function Settings() {
     { id: "profile", label: "Perfil", icon: User },
     { id: "company", label: "Empresa", icon: Building },
     { id: "sellers", label: "Vendedores", icon: Users },
+    { id: "payments", label: "Formas de Pagamento", icon: CreditCard },
     { id: "appearance", label: "Aparência", icon: Palette },
     { id: "notifications", label: "Notificações", icon: Bell },
     { id: "security", label: "Segurança", icon: Shield },
@@ -372,6 +543,145 @@ export default function Settings() {
             </Card>
           )}
 
+          {activeSection === "payments" && (
+            <Card data-testid="card-payments">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <CreditCard className="w-5 h-5 mr-2" />
+                    Formas de Pagamento
+                  </div>
+                  <Button
+                    onClick={() => setShowPaymentMethodForm(true)}
+                    size="sm"
+                    data-testid="button-add-payment-method"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nova Forma
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Formas para Agência */}
+                  <div>
+                    <h4 className="font-medium mb-4 text-green-700 dark:text-green-400">
+                      💰 Formas de Pagamento - Agência
+                    </h4>
+                    <div className="space-y-3">
+                      {paymentMethodsAgencia?.length > 0 ? (
+                        paymentMethodsAgencia.map((method: any) => (
+                          <div key={method.id} className="border rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
+                            <div className="flex items-center justify-between mb-2">
+                              <h5 className="font-medium">{method.nome}</h5>
+                              <div className="flex space-x-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => handleEditPaymentMethod(method)}
+                                  data-testid={`button-edit-payment-method-${method.id}`}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="text-red-600"
+                                  onClick={() => deletePaymentMethodMutation.mutate(method.id)}
+                                  data-testid={`button-delete-payment-method-${method.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{method.descricao}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          Nenhuma forma de pagamento configurada para agência
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Formas para Fornecedor */}
+                  <div>
+                    <h4 className="font-medium mb-4 text-blue-700 dark:text-blue-400">
+                      🏢 Formas de Pagamento - Fornecedor
+                    </h4>
+                    <div className="space-y-3">
+                      {paymentMethodsFornecedor?.length > 0 ? (
+                        paymentMethodsFornecedor.map((method: any) => (
+                          <div key={method.id} className="border rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20">
+                            <div className="flex items-center justify-between mb-2">
+                              <h5 className="font-medium">{method.nome}</h5>
+                              <div className="flex space-x-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => handleEditPaymentMethod(method)}
+                                  data-testid={`button-edit-payment-method-${method.id}`}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="text-red-600"
+                                  onClick={() => deletePaymentMethodMutation.mutate(method.id)}
+                                  data-testid={`button-delete-payment-method-${method.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{method.descricao}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          Nenhuma forma de pagamento configurada para fornecedor
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Seção de Condições de Pagamento */}
+                <div>
+                  <h4 className="font-medium mb-4">⚙️ Condições de Pagamento</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="border rounded-lg p-4">
+                      <h5 className="font-medium mb-2">À Vista</h5>
+                      <p className="text-sm text-muted-foreground">1 parcela • 0 dias de intervalo</p>
+                      <p className="text-xs text-muted-foreground mt-1">100% na confirmação</p>
+                    </div>
+                    
+                    <div className="border rounded-lg p-4">
+                      <h5 className="font-medium mb-2">Parcelado 3x</h5>
+                      <p className="text-sm text-muted-foreground">3 parcelas • 30 dias de intervalo</p>
+                      <p className="text-xs text-muted-foreground mt-1">30% entrada + 2x35%</p>
+                    </div>
+                    
+                    <div className="border rounded-lg p-4">
+                      <h5 className="font-medium mb-2">50% + 50%</h5>
+                      <p className="text-sm text-muted-foreground">2 parcelas • 30 dias de intervalo</p>
+                      <p className="text-xs text-muted-foreground mt-1">50% entrada + 50% em 30 dias</p>
+                    </div>
+                  </div>
+                  
+                  <Button variant="outline" className="mt-4" data-testid="button-add-payment-condition">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nova Condição
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {activeSection === "appearance" && (
             <Card data-testid="card-appearance">
               <CardHeader>
@@ -511,6 +821,229 @@ export default function Settings() {
           )}
         </div>
       </div>
+      
+      {/* Payment Method Modal */}
+      <Dialog open={showPaymentMethodForm} onOpenChange={setShowPaymentMethodForm}>
+        <DialogContent data-testid="dialog-payment-method">
+          <DialogHeader>
+            <DialogTitle>
+              {editingPaymentMethod ? "Editar Forma de Pagamento" : "Nova Forma de Pagamento"}
+            </DialogTitle>
+          </DialogHeader>
+          <Form {...paymentMethodForm}>
+            <form onSubmit={paymentMethodForm.handleSubmit(handlePaymentMethodSubmit)} className="space-y-4">
+              <FormField
+                control={paymentMethodForm.control}
+                name="nome"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Ex: PIX, Cartão de Crédito" data-testid="input-payment-method-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={paymentMethodForm.control}
+                name="tipo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-payment-method-type">
+                          <SelectValue placeholder="Selecione o tipo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="AGENCIA">Agência</SelectItem>
+                        <SelectItem value="FORNECEDOR">Fornecedor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={paymentMethodForm.control}
+                name="descricao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Descrição</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        {...field} 
+                        placeholder="Descrição da forma de pagamento"
+                        rows={3}
+                        data-testid="input-payment-method-description" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={() => setShowPaymentMethodForm(false)}
+                  data-testid="button-cancel-payment-method"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createPaymentMethodMutation.isPending || updatePaymentMethodMutation.isPending}
+                  data-testid="button-save-payment-method"
+                >
+                  {editingPaymentMethod ? "Atualizar" : "Criar"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Condition Modal */}
+      <Dialog open={showPaymentConditionForm} onOpenChange={setShowPaymentConditionForm}>
+        <DialogContent data-testid="dialog-payment-condition">
+          <DialogHeader>
+            <DialogTitle>
+              {editingPaymentCondition ? "Editar Condição de Pagamento" : "Nova Condição de Pagamento"}
+            </DialogTitle>
+          </DialogHeader>
+          <Form {...paymentConditionForm}>
+            <form onSubmit={paymentConditionForm.handleSubmit(handlePaymentConditionSubmit)} className="space-y-4">
+              <FormField
+                control={paymentConditionForm.control}
+                name="formaPagamentoId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Forma de Pagamento *</FormLabel>
+                    <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString() || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-payment-condition-method">
+                          <SelectValue placeholder="Selecione a forma de pagamento" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {paymentMethodsAgencia?.map((method: any) => (
+                          <SelectItem key={method.id} value={method.id.toString()}>
+                            {method.nome} (Agência)
+                          </SelectItem>
+                        ))}
+                        {paymentMethodsFornecedor?.map((method: any) => (
+                          <SelectItem key={method.id} value={method.id.toString()}>
+                            {method.nome} (Fornecedor)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={paymentConditionForm.control}
+                name="nome"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome da Condição *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Ex: À vista, 30 dias, Parcelado 3x" data-testid="input-payment-condition-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={paymentConditionForm.control}
+                  name="parcelas"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Parcelas</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          {...field} 
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                          data-testid="input-payment-condition-installments" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={paymentConditionForm.control}
+                  name="intervaloDias"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Intervalo (dias)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          {...field} 
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                          data-testid="input-payment-condition-interval" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={paymentConditionForm.control}
+                name="percentualEntrada"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Percentual de Entrada (%)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        step="0.01"
+                        {...field} 
+                        placeholder="0.00"
+                        data-testid="input-payment-condition-down-payment" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={() => setShowPaymentConditionForm(false)}
+                  data-testid="button-cancel-payment-condition"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createPaymentConditionMutation.isPending || updatePaymentConditionMutation.isPending}
+                  data-testid="button-save-payment-condition"
+                >
+                  {editingPaymentCondition ? "Atualizar" : "Criar"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

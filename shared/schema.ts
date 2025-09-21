@@ -61,6 +61,8 @@ export const accountTypeEnum = pgEnum("account_type", ["pagar", "receber"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pendente", "parcial", "liquidado"]);
 export const serviceTypeEnum = pgEnum("service_type", ["aereo", "hotel", "transfer", "outros"]);
 export const accountCategoryTypeEnum = pgEnum("account_category_type", ["receita", "despesa", "outros"]);
+export const paymentMethodTypeEnum = pgEnum("payment_method_type", ["AGENCIA", "FORNECEDOR"]);
+export const passengerRoleEnum = pgEnum("passenger_role", ["passageiro", "contratante"]);
 
 // Clients
 export const clients = pgTable("clients", {
@@ -100,6 +102,33 @@ export const sellers = pgTable("sellers", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Payment Methods - Formas de pagamento com condições específicas
+export const paymentMethods = pgTable("payment_methods", {
+  id: serial("id").primaryKey(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  tipo: paymentMethodTypeEnum("tipo").notNull(), // AGENCIA ou FORNECEDOR
+  descricao: text("descricao"),
+  ativo: boolean("ativo").default(true),
+  diasCarencia: integer("dias_carencia").default(0), // Dias até o vencimento
+  percentualTaxa: decimal("percentual_taxa", { precision: 5, scale: 2 }).default("0.00"), // Taxa da forma de pagamento
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Payment Conditions - Condições específicas de pagamento para cada forma
+export const paymentConditions = pgTable("payment_conditions", {
+  id: serial("id").primaryKey(),
+  formaPagamentoId: integer("forma_pagamento_id").references(() => paymentMethods.id).notNull(),
+  nome: varchar("nome", { length: 255 }).notNull(), // Ex: "À vista", "30 dias", "Parcelado 3x"
+  parcelas: integer("parcelas").default(1),
+  intervaloDias: integer("intervalo_dias").default(0), // Dias entre parcelas
+  percentualEntrada: decimal("percentual_entrada", { precision: 5, scale: 2 }).default("0.00"),
+  ativo: boolean("ativo").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Sales
 export const sales = pgTable("sales", {
   id: serial("id").primaryKey(),
@@ -123,6 +152,7 @@ export const passengers = pgTable("passengers", {
   nome: varchar("nome", { length: 255 }).notNull(),
   cpf: varchar("cpf", { length: 14 }),
   dataNascimento: varchar("data_nascimento", { length: 10 }),
+  funcao: passengerRoleEnum("funcao").default("passageiro"), // passageiro ou contratante
   observacoes: text("observacoes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -208,11 +238,16 @@ export const paymentPlans = pgTable("payment_plans", {
   descricao: varchar("descricao", { length: 255 }).notNull(),
   valor: decimal("valor", { precision: 10, scale: 2 }).notNull(),
   dataVencimento: timestamp("data_vencimento").notNull(),
-  formaPagamento: varchar("forma_pagamento", { length: 50 }),
+  dataPrevisaoPagamento: timestamp("data_previsao_pagamento"), // Nova previsão de pagamento
+  formaPagamentoId: integer("forma_pagamento_id").references(() => paymentMethods.id), // Referência à nova tabela
+  condicaoPagamentoId: integer("condicao_pagamento_id").references(() => paymentConditions.id), // Condição específica
   quemRecebe: varchar("quem_recebe", { length: 50 }).notNull(), // AGENCIA ou FORNECEDOR
+  passageiroPaganteId: integer("passageiro_pagante_id").references(() => passengers.id), // Quem está pagando
   status: paymentStatusEnum("status").default("pendente"),
   dataLiquidacao: timestamp("data_liquidacao"),
+  valorPago: decimal("valor_pago", { precision: 10, scale: 2 }).default("0.00"), // Valor já pago
   valorLiquidado: decimal("valor_liquidado", { precision: 10, scale: 2 }).default("0.00"),
+  saldoAberto: decimal("saldo_aberto", { precision: 10, scale: 2 }).notNull(), // Saldo em aberto (calculado: valor - valorPago)
   contaBancariaId: integer("conta_bancaria_id").references(() => bankAccounts.id),
   observacoes: text("observacoes"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -533,12 +568,15 @@ export const insertServiceSchema = createInsertSchema(services).omit({ id: true,
 export const insertServicePassengerSchema = createInsertSchema(servicePassengers).omit({ id: true });
 export const insertSaleSellerSchema = createInsertSchema(saleSellers).omit({ id: true });
 export const insertBankAccountSchema = createInsertSchema(bankAccounts).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPaymentMethodSchema = createInsertSchema(paymentMethods).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPaymentConditionSchema = createInsertSchema(paymentConditions).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAccountCategorySchema = createInsertSchema(accountCategories).omit({ id: true, createdAt: true });
 export const insertFinancialAccountSchema = createInsertSchema(financialAccounts).omit({ id: true, createdAt: true, updatedAt: true }).extend({
   dataVencimento: z.string().optional().transform(val => val ? new Date(val) : undefined),
 });
 export const insertPaymentPlanSchema = createInsertSchema(paymentPlans).omit({ id: true, createdAt: true, updatedAt: true }).extend({
   dataVencimento: z.string().transform(val => new Date(val)),
+  dataPrevisaoPagamento: z.string().optional().transform(val => val ? new Date(val) : undefined),
   dataLiquidacao: z.string().optional().transform(val => val ? new Date(val) : undefined),
 });
 export const insertSaleRequirementSchema = createInsertSchema(saleRequirements).omit({ id: true, createdAt: true, updatedAt: true }).extend({
@@ -582,6 +620,10 @@ export type SaleSeller = typeof saleSellers.$inferSelect;
 export type InsertSaleSeller = z.infer<typeof insertSaleSellerSchema>;
 export type BankAccount = typeof bankAccounts.$inferSelect;
 export type InsertBankAccount = z.infer<typeof insertBankAccountSchema>;
+export type PaymentMethod = typeof paymentMethods.$inferSelect;
+export type InsertPaymentMethod = z.infer<typeof insertPaymentMethodSchema>;
+export type PaymentCondition = typeof paymentConditions.$inferSelect;
+export type InsertPaymentCondition = z.infer<typeof insertPaymentConditionSchema>;
 export type AccountCategory = typeof accountCategories.$inferSelect;
 export type InsertAccountCategory = z.infer<typeof insertAccountCategorySchema>;
 export type FinancialAccount = typeof financialAccounts.$inferSelect;
