@@ -1515,87 +1515,221 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
         </div>
       </div>
 
-      {/* Passenger Modal - Now searches CLIENTES */}
+      {/* Passenger Modal - With tabs for direct passenger or client search */}
       <Dialog open={showPassengerModal} onOpenChange={setShowPassengerModal}>
-        <DialogContent data-testid="dialog-passenger">
+        <DialogContent className="max-w-2xl" data-testid="dialog-passenger">
           <DialogHeader>
             <DialogTitle>
-              Adicionar Passageiro da Base de Clientes
+              {editingItem ? "Editar Passageiro" : "Adicionar Passageiro"}
             </DialogTitle>
           </DialogHeader>
+          
+          {/* Toggle between direct form and client search */}
           <div className="space-y-4">
-            {/* Search existing clients */}
-            <div>
-              <label className="text-sm font-medium text-foreground">Buscar Cliente Existente</label>
-              <div className="relative mt-1">
-                <Input
-                  type="text"
-                  placeholder="Digite o nome ou CPF do cliente..."
-                  value={searchClient}
-                  onChange={(e) => setSearchClient(e.target.value)}
-                  data-testid="input-search-passenger-client"
-                />
-              </div>
-              {/* Show filtered clients */}
-              {searchClient && filteredClients && filteredClients.length > 0 && (
-                <div className="mt-2 max-h-48 overflow-y-auto border border-border rounded-md">
-                  {filteredClients.map((client: any) => (
-                    <div
-                      key={client.id}
-                      className="p-3 hover:bg-accent cursor-pointer border-b border-border last:border-b-0"
-                      onClick={() => {
-                        // Add client as passenger
-                        const newPassenger = {
-                          id: Date.now(),
-                          clienteId: client.id,
-                          nome: client.nome,
-                          cpf: client.cpf,
-                          dataNascimento: client.dataNascimento,
-                          funcao: "passageiro",
-                          isFromClients: true
-                        };
-                        setPassengers([...passengers, newPassenger]);
-                        setShowPassengerModal(false);
-                        setSearchClient("");
-                      }}
-                      data-testid={`client-option-${client.id}`}
-                    >
-                      <div className="font-medium">{client.nome}</div>
-                      {client.cpf && <div className="text-sm text-muted-foreground">CPF: {client.cpf}</div>}
-                      {client.email && <div className="text-sm text-muted-foreground">Email: {client.email}</div>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Option to create new client */}
-            <div className="border-t border-border pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="w-full"
-                onClick={() => {
-                  setShowPassengerModal(false);
-                  setShowClientModal(true);
-                }}
-                data-testid="button-create-new-client"
+            <div className="flex space-x-1 border-b border-border">
+              <Button
+                type="button"
+                variant={!showClientModal ? "ghost" : "outline"}
+                className={`flex-1 ${!showClientModal ? "border-b-2 border-primary bg-muted" : ""}`}
+                onClick={() => setShowClientModal(false)}
+                data-testid="tab-direct-passenger"
+              >
+                <User className="w-4 h-4 mr-2" />
+                Passageiro Direto
+              </Button>
+              <Button
+                type="button"
+                variant={showClientModal ? "ghost" : "outline"}
+                className={`flex-1 ${showClientModal ? "border-b-2 border-primary bg-muted" : ""}`}
+                onClick={() => setShowClientModal(true)}
+                data-testid="tab-from-client"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Cadastrar Novo Cliente
+                Da Base de Clientes
               </Button>
             </div>
 
-            <div className="flex justify-end space-x-2">
-              <Button 
-                type="button" 
-                variant="secondary" 
-                onClick={() => setShowPassengerModal(false)}
-                data-testid="button-cancel-passenger"
-              >
-                Cancelar
-              </Button>
-            </div>
+            {!showClientModal ? (
+              /* Direct passenger form */
+              <Form {...passengerForm}>
+                <form onSubmit={passengerForm.handleSubmit(handleAddPassenger)} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={passengerForm.control}
+                      name="nome"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nome *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Nome completo" {...field} data-testid="input-passenger-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={passengerForm.control}
+                      name="cpf"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>CPF</FormLabel>
+                          <FormControl>
+                            <Input placeholder="000.000.000-00" {...field} data-testid="input-passenger-cpf" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={passengerForm.control}
+                      name="dataNascimento"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Data de Nascimento</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-passenger-birthdate" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={passengerForm.control}
+                      name="funcao"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Função</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-passenger-role">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="passageiro">Passageiro</SelectItem>
+                              <SelectItem value="contratante">Contratante</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={passengerForm.control}
+                    name="observacoes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Observações</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Observações adicionais..." {...field} data-testid="textarea-passenger-notes" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="flex justify-end space-x-2">
+                    <Button 
+                      type="button" 
+                      variant="secondary" 
+                      onClick={() => {
+                        setShowPassengerModal(false);
+                        setEditingItem(null);
+                        passengerForm.reset();
+                      }}
+                      data-testid="button-cancel-passenger"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button type="submit" data-testid="button-save-passenger">
+                      {editingItem ? "Atualizar" : "Adicionar"} Passageiro
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            ) : (
+              /* Client search section */
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground">Buscar Cliente Existente</label>
+                  <div className="relative mt-1">
+                    <Input
+                      type="text"
+                      placeholder="Digite o nome ou CPF do cliente..."
+                      value={searchClient}
+                      onChange={(e) => setSearchClient(e.target.value)}
+                      data-testid="input-search-passenger-client"
+                    />
+                  </div>
+                  {/* Show filtered clients */}
+                  {searchClient && filteredClients && filteredClients.length > 0 && (
+                    <div className="mt-2 max-h-48 overflow-y-auto border border-border rounded-md">
+                      {filteredClients.map((client: any) => (
+                        <div
+                          key={client.id}
+                          className="p-3 hover:bg-accent cursor-pointer border-b border-border last:border-b-0"
+                          onClick={() => {
+                            // Add client as passenger
+                            const newPassenger = {
+                              id: Date.now(),
+                              clienteId: client.id,
+                              nome: client.nome,
+                              cpf: client.cpf,
+                              dataNascimento: client.dataNascimento,
+                              funcao: "passageiro",
+                              isFromClients: true
+                            };
+                            setPassengers([...passengers, newPassenger]);
+                            setShowPassengerModal(false);
+                            setShowClientModal(false);
+                            setSearchClient("");
+                          }}
+                          data-testid={`client-option-${client.id}`}
+                        >
+                          <div className="font-medium">{client.nome}</div>
+                          {client.cpf && <div className="text-sm text-muted-foreground">CPF: {client.cpf}</div>}
+                          {client.email && <div className="text-sm text-muted-foreground">Email: {client.email}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-border pt-4 text-center">
+                  <p className="text-sm text-muted-foreground mb-3">Cliente não encontrado?</p>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => {
+                      setShowPassengerModal(false);
+                      setShowClientModal(false);
+                    }}
+                    data-testid="button-create-new-client-from-passenger"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Criar Novo Cliente e Adicionar como Passageiro
+                  </Button>
+                </div>
+
+                <div className="flex justify-end space-x-2">
+                  <Button 
+                    type="button" 
+                    variant="secondary" 
+                    onClick={() => {
+                      setShowPassengerModal(false);
+                      setShowClientModal(false);
+                      setSearchClient("");
+                    }}
+                    data-testid="button-cancel-passenger-search"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
