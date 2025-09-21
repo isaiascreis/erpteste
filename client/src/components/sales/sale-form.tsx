@@ -98,12 +98,24 @@ const paymentPlanSchema = z.object({
   quemRecebe: z.enum(["AGENCIA", "FORNECEDOR"]),
 });
 
+// Import requirement schema from shared types
+const requirementSchema = z.object({
+  tipo: z.enum(["checkin", "cartinha", "documentacao", "pagamento", "outros"]),
+  descricao: z.string().min(1, "Descrição é obrigatória"),
+  dataVencimento: z.string().optional(),
+  responsavelId: z.string().optional(),
+  status: z.enum(["pendente", "em_andamento", "concluida", "cancelada"]).default("pendente"),
+  prioridade: z.enum(["baixa", "normal", "alta", "urgente"]).default("normal"),
+  observacoes: z.string().optional(),
+});
+
 type PassengerFormData = z.infer<typeof passengerSchema>;
 type ServiceFormData = z.infer<typeof serviceSchema>;
 type FlightDetailsFormData = z.infer<typeof flightDetailsSchema>;
 type HotelDetailsFormData = z.infer<typeof hotelDetailsSchema>;
 type SellerFormData = z.infer<typeof sellerSchema>;
 type PaymentPlanFormData = z.infer<typeof paymentPlanSchema>;
+type RequirementFormData = z.infer<typeof requirementSchema>;
 
 interface SaleFormProps {
   sale?: any;
@@ -118,10 +130,12 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   const [services, setServices] = useState<any[]>([]);
   const [salesSellers, setSalesSellers] = useState<any[]>([]);
   const [paymentPlans, setPaymentPlans] = useState<any[]>([]);
+  const [requirements, setRequirements] = useState<any[]>([]);
   const [showPassengerModal, setShowPassengerModal] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showSellerModal, setShowSellerModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showRequirementModal, setShowRequirementModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [searchClient, setSearchClient] = useState("");
 
@@ -135,6 +149,19 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   const { data: sellers } = useQuery({
     queryKey: ["/api/sellers"],
   });
+
+  // Fetch requirements for existing sale
+  const { data: saleRequirements } = useQuery({
+    queryKey: ["/api/sales", sale?.id, "requirements"],
+    enabled: !!sale?.id,
+  });
+
+  // Hydrate requirements state from fetched data
+  useEffect(() => {
+    if (saleRequirements) {
+      setRequirements(saleRequirements);
+    }
+  }, [saleRequirements]);
 
   const passengerForm = useForm<PassengerFormData>({
     resolver: zodResolver(passengerSchema),
@@ -200,11 +227,42 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     },
   });
 
+  const requirementForm = useForm<RequirementFormData>({
+    resolver: zodResolver(requirementSchema),
+    defaultValues: { 
+      tipo: "checkin", 
+      descricao: "", 
+      dataVencimento: "", 
+      responsavelId: "", 
+      status: "pendente", 
+      prioridade: "normal", 
+      observacoes: "" 
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      await apiRequest("POST", "/api/sales", data);
+      return await apiRequest("POST", "/api/sales", data);
     },
-    onSuccess: () => {
+    onSuccess: async (newSale: any) => {
+      // Create requirements for the new sale if any exist
+      if (requirements.length > 0 && newSale?.id) {
+        try {
+          for (const requirement of requirements) {
+            // Remove the temporary ID and create requirement
+            const { id, ...requirementData } = requirement;
+            await apiRequest("POST", `/api/sales/${newSale.id}/requirements`, requirementData);
+          }
+        } catch (error) {
+          console.error("Error creating requirements:", error);
+          toast({ 
+            title: "Venda criada, mas houve erro ao criar algumas tarefas", 
+            description: "Você pode adicionar as tarefas manualmente editando a venda.",
+            variant: "destructive" 
+          });
+        }
+      }
+      
       toast({ title: "Venda criada com sucesso!" });
       queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
       onClose();
@@ -252,6 +310,76 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
       }
       toast({ 
         title: "Erro ao atualizar venda", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
+  // Requirement mutations
+  const createRequirementMutation = useMutation({
+    mutationFn: async (data: any) => {
+      if (!sale?.id) throw new Error("Sale ID required");
+      return await apiRequest("POST", `/api/sales/${sale.id}/requirements`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "Tarefa criada com sucesso!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/sales", sale?.id, "requirements"] });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro ao criar tarefa", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const updateRequirementMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      return await apiRequest("PUT", `/api/requirements/${id}`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "Tarefa atualizada com sucesso!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/sales", sale?.id, "requirements"] });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro ao atualizar tarefa", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const completeRequirementMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return await apiRequest("PUT", `/api/requirements/${id}/complete`, {});
+    },
+    onSuccess: () => {
+      toast({ title: "Tarefa marcada como concluída!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/sales", sale?.id, "requirements"] });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro ao completar tarefa", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const deleteRequirementMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return await apiRequest("DELETE", `/api/requirements/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Tarefa excluída com sucesso!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/sales", sale?.id, "requirements"] });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro ao excluir tarefa", 
         description: error.message,
         variant: "destructive" 
       });
@@ -384,6 +512,46 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     paymentForm.reset();
   };
 
+  const handleAddRequirement = (data: RequirementFormData) => {
+    if (editingItem) {
+      // Update existing requirement
+      updateRequirementMutation.mutate({ id: editingItem.id, data });
+    } else {
+      // Create new requirement (only for existing sales)
+      if (sale?.id) {
+        createRequirementMutation.mutate(data);
+      } else {
+        // For new sales, add to local state until sale is created
+        setRequirements([...requirements, { ...data, id: Date.now() }]);
+      }
+    }
+    setShowRequirementModal(false);
+    setEditingItem(null);
+    requirementForm.reset();
+  };
+
+  const handleCompleteRequirement = (id: number) => {
+    if (sale?.id) {
+      // Use complete API for existing sales
+      completeRequirementMutation.mutate(id);
+    } else {
+      // Update local state for new sales
+      setRequirements(requirements.map(r => 
+        r.id === id ? { ...r, status: "concluida", dataConclusao: new Date().toISOString() } : r
+      ));
+    }
+  };
+
+  const handleDeleteRequirement = (id: number) => {
+    if (sale?.id && typeof id === 'number' && id > 1000000) {
+      // Use delete API for existing sales (real IDs are larger than Date.now() temp IDs)
+      deleteRequirementMutation.mutate(id);
+    } else {
+      // Remove from local state for new sales or temp IDs
+      setRequirements(requirements.filter(r => r.id !== id));
+    }
+  };
+
   const handleSave = () => {
     if (!selectedClient) {
       toast({ title: "Selecione um cliente", variant: "destructive" });
@@ -395,6 +563,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     const cleanServices = services.map(({ id, ...service }) => service);
     const cleanSellers = salesSellers.map(({ id, ...seller }) => seller);
     const cleanPaymentPlans = paymentPlans.map(({ id, ...payment }) => payment);
+    const cleanRequirements = requirements.map(({ id, ...requirement }) => requirement);
 
     const saleData = {
       clienteId: selectedClient.id,
@@ -402,6 +571,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
       services: cleanServices,
       sellers: cleanSellers,
       paymentPlans: cleanPaymentPlans,
+      // Note: requirements are handled separately via API calls
     };
 
     if (sale) {
@@ -460,6 +630,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     { id: 2, name: "Serviços", description: "Aéreo, Hotel, Transfer" },
     { id: 3, name: "Vendedores", description: "Comissões" },
     { id: 4, name: "Pagamentos", description: "Plano de pagamento" },
+    { id: 5, name: "Tarefas/Exigências", description: "Check-in, Cartinhas, Documentos" },
   ];
 
   return (
@@ -952,6 +1123,121 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                 </CardContent>
               </Card>
             )}
+
+            {/* Step 5: Requirements/Tasks */}
+            {step === 5 && (
+              <Card data-testid="card-requirements">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Tarefas e Exigências</CardTitle>
+                    <Button 
+                      onClick={() => setShowRequirementModal(true)} 
+                      size="sm"
+                      data-testid="button-add-requirement"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Nova Tarefa
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {requirements.map((requirement) => (
+                      <div
+                        key={requirement.id}
+                        className="p-4 border border-border rounded-lg"
+                        data-testid={`requirement-item-${requirement.id}`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-3">
+                            <Badge 
+                              variant={requirement.tipo === 'checkin' ? 'default' : 
+                                     requirement.tipo === 'cartinha' ? 'secondary' : 
+                                     requirement.tipo === 'documentacao' ? 'outline' : 'destructive'}
+                            >
+                              {requirement.tipo === 'checkin' ? '✈️ Check-in' :
+                               requirement.tipo === 'cartinha' ? '📝 Cartinha' :
+                               requirement.tipo === 'documentacao' ? '📄 Documentos' :
+                               requirement.tipo === 'pagamento' ? '💳 Pagamento' : '📋 Outros'}
+                            </Badge>
+                            <Badge 
+                              variant={requirement.status === 'concluida' ? 'default' : 
+                                     requirement.status === 'em_andamento' ? 'secondary' : 'outline'}
+                            >
+                              {requirement.status === 'concluida' ? '✅ Concluída' :
+                               requirement.status === 'em_andamento' ? '🔄 Em Andamento' :
+                               requirement.status === 'cancelada' ? '❌ Cancelada' : '⏳ Pendente'}
+                            </Badge>
+                            <Badge variant="outline">
+                              {requirement.prioridade === 'urgente' ? '🔴 Urgente' :
+                               requirement.prioridade === 'alta' ? '🟡 Alta' :
+                               requirement.prioridade === 'baixa' ? '🔵 Baixa' : '⚪ Normal'}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            {requirement.status !== 'concluida' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleCompleteRequirement(requirement.id)}
+                                data-testid={`button-complete-requirement-${requirement.id}`}
+                                title="Marcar como concluída"
+                              >
+                                <Check className="w-4 h-4 text-green-600" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditingItem(requirement);
+                                requirementForm.reset(requirement);
+                                setShowRequirementModal(true);
+                              }}
+                              data-testid={`button-edit-requirement-${requirement.id}`}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteRequirement(requirement.id)}
+                              data-testid={`button-delete-requirement-${requirement.id}`}
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="font-medium text-foreground">{requirement.descricao}</p>
+                          <div className="text-sm text-muted-foreground space-y-1">
+                            {requirement.dataVencimento && (
+                              <p>📅 Vencimento: {new Date(requirement.dataVencimento).toLocaleDateString('pt-BR')}</p>
+                            )}
+                            {requirement.responsavelId && (
+                              <p>👤 Responsável: {requirement.responsavelId}</p>
+                            )}
+                            {requirement.observacoes && (
+                              <p>📝 Observações: {requirement.observacoes}</p>
+                            )}
+                            {requirement.dataConclusao && (
+                              <p>✅ Concluída em: {new Date(requirement.dataConclusao).toLocaleDateString('pt-BR')}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {requirements.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground" data-testid="no-requirements">
+                        <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                        <p>Nenhuma tarefa adicionada</p>
+                        <p className="text-sm mt-2">Adicione tarefas como check-in, cartinhas, documentos e outros requisitos</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Summary Sidebar */}
@@ -1001,7 +1287,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                     Anterior
                   </Button>
                 )}
-                {step < 4 && (
+                {step < 5 && (
                   <Button
                     onClick={() => setStep(step + 1)}
                     className="flex-1"
@@ -1984,6 +2270,160 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   Cancelar
                 </Button>
                 <Button type="submit" data-testid="button-save-payment">
+                  {editingItem ? "Atualizar" : "Adicionar"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Requirement Modal */}
+      <Dialog open={showRequirementModal} onOpenChange={setShowRequirementModal}>
+        <DialogContent data-testid="dialog-requirement">
+          <DialogHeader>
+            <DialogTitle>
+              {editingItem ? "Editar Tarefa" : "Nova Tarefa"}
+            </DialogTitle>
+          </DialogHeader>
+          <Form {...requirementForm}>
+            <form onSubmit={requirementForm.handleSubmit(handleAddRequirement)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={requirementForm.control}
+                  name="tipo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-requirement-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="checkin">✈️ Check-in</SelectItem>
+                          <SelectItem value="cartinha">📝 Cartinha</SelectItem>
+                          <SelectItem value="documentacao">📄 Documentação</SelectItem>
+                          <SelectItem value="pagamento">💳 Pagamento</SelectItem>
+                          <SelectItem value="outros">📋 Outros</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={requirementForm.control}
+                  name="prioridade"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Prioridade</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || "normal"}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-requirement-priority">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="baixa">🔵 Baixa</SelectItem>
+                          <SelectItem value="normal">⚪ Normal</SelectItem>
+                          <SelectItem value="alta">🟡 Alta</SelectItem>
+                          <SelectItem value="urgente">🔴 Urgente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={requirementForm.control}
+                name="descricao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Descrição *</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} data-testid="input-requirement-description" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={requirementForm.control}
+                  name="dataVencimento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data de Vencimento</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-requirement-date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={requirementForm.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || "pendente"}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-requirement-status">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="pendente">⏳ Pendente</SelectItem>
+                          <SelectItem value="em_andamento">🔄 Em Andamento</SelectItem>
+                          <SelectItem value="concluida">✅ Concluída</SelectItem>
+                          <SelectItem value="cancelada">❌ Cancelada</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={requirementForm.control}
+                name="responsavelId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Responsável</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="ID do usuário responsável" data-testid="input-requirement-responsible" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={requirementForm.control}
+                name="observacoes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observações</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} data-testid="input-requirement-observations" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={() => setShowRequirementModal(false)}
+                  data-testid="button-cancel-requirement"
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" data-testid="button-save-requirement">
                   {editingItem ? "Atualizar" : "Adicionar"}
                 </Button>
               </div>
