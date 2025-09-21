@@ -310,7 +310,7 @@ export function ChatInterface() {
   console.log("WhatsApp server status:", whatsappStatus?.status);
 
   // Verificar se o WhatsApp está conectado
-  const isWhatsAppConnected = whatsappStatus?.status === 'Conectado';
+  const isWhatsAppConnected = whatsappStatus?.status === 'Conectado' || whatsappStatus?.ready === true;
   const whatsappStatusText = whatsappStatus?.status || 'Verificando...';
 
   return (

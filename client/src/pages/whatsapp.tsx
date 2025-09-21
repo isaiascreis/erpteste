@@ -109,6 +109,16 @@ export default function WhatsApp() {
               setConnectionStatus("disconnected");
             }
           }
+        } else if (data.needsReconnection) {
+          console.log('Processo de reconexão iniciado...');
+          toast({
+            title: "Iniciando reconexão",
+            description: "Aguarde alguns segundos para o QR Code aparecer...",
+          });
+          // Verificar status novamente em alguns segundos
+          setTimeout(() => {
+            checkWhatsAppStatus();
+          }, 5000);
         }
       } else {
         console.warn('QR endpoint returned:', response.status);
@@ -117,6 +127,53 @@ export default function WhatsApp() {
       if (error?.name !== 'AbortError') {
         console.warn('Failed to fetch QR code:', error?.name || error?.message);
       }
+    }
+  };
+
+  // Função para reconectar WhatsApp
+  const reconnectWhatsApp = async () => {
+    try {
+      setIsChecking(true);
+      
+      const response = await fetch('/api/whatsapp/reconnect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: "Reconexão iniciada",
+          description: data.message,
+        });
+        
+        // Limpar QR code atual e aguardar alguns segundos
+        setQrCodeUrl(null);
+        setConnectionStatus("connecting");
+        
+        // Verificar status após reconexão
+        setTimeout(() => {
+          checkWhatsAppStatus();
+        }, 8000);
+      } else {
+        toast({
+          title: "Erro na reconexão",
+          description: data.message || "Erro ao iniciar reconexão",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao reconectar:', error);
+      toast({
+        title: "Erro na reconexão",
+        description: "Falha ao conectar com o servidor",
+        variant: "destructive",
+      });
+    } finally {
+      setIsChecking(false);
     }
   };
 
@@ -261,13 +318,21 @@ export default function WhatsApp() {
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button 
                       onClick={fetchQRCode}
                       disabled={isChecking}
                       data-testid="button-generate-qr"
                     >
                       {isChecking ? "Carregando..." : "Gerar Novo QR Code"}
+                    </Button>
+                    <Button 
+                      onClick={reconnectWhatsApp}
+                      disabled={isChecking}
+                      variant="secondary"
+                      data-testid="button-reconnect"
+                    >
+                      {isChecking ? "Conectando..." : "Reconectar WhatsApp"}
                     </Button>
                     <Button 
                       variant="outline"

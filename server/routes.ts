@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { setupSimpleAuth, isAuthenticated } from "./simpleAuth";
 import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema } from "@shared/schema";
 import { z } from "zod";
-import { WhatsAppAPI } from "./whatsapp";
+import { WhatsAppAPI, whatsappIntegration } from "./whatsapp";
 
 // Transfer validation schema
 const transferBankAccountSchema = z.object({
@@ -713,11 +713,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (qrCode) {
         res.json({ qrCode });
       } else {
-        res.status(404).json({ error: 'QR Code não disponível' });
+        // Se não há QR code e está desconectado, tentar gerar um novo
+        const status = WhatsAppAPI.getStatus();
+        if (status.status === 'Desconectado') {
+          // Forçar reconexão para gerar novo QR code
+          setTimeout(() => {
+            whatsappIntegration.clearSession();
+          }, 1000);
+          res.json({ message: 'Iniciando processo de reconexão...', needsReconnection: true });
+        } else {
+          res.status(404).json({ error: 'QR Code não disponível' });
+        }
       }
     } catch (error) {
       console.error("Error getting QR code:", error);
       res.status(500).json({ message: "Failed to get QR code" });
+    }
+  });
+
+  // WhatsApp integrado - Reconectar / Limpar sessão
+  app.post('/api/whatsapp/reconnect', async (req, res) => {
+    try {
+      await whatsappIntegration.clearSession();
+      res.json({ 
+        success: true,
+        message: 'Processo de reconexão iniciado. Aguarde alguns segundos para o novo QR Code.' 
+      });
+    } catch (error) {
+      console.error("Error reconnecting WhatsApp:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Erro ao reconectar WhatsApp" 
+      });
     }
   });
 
