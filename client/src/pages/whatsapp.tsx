@@ -45,19 +45,14 @@ export default function WhatsApp() {
       const isReady = data.ready === true;
       
       console.log('WhatsApp server status:', data.status);
-      console.log('Status processado:', status);
-      console.log('isReady:', isReady);
       
       if (status === 'conectado' || isReady) {
-        console.log('Definindo status como CONNECTED');
         setConnectionStatus("connected");
         setQrCodeUrl(null);
       } else if (status.includes('aguardando') || status.includes('qr code')) {
-        console.log('Definindo status como DISCONNECTED (aguardando/qr)');
         setConnectionStatus("disconnected");
         await fetchQRCode();
       } else {
-        console.log('Definindo status como DISCONNECTED (default)');
         setConnectionStatus("disconnected");
         await fetchQRCode();
       }

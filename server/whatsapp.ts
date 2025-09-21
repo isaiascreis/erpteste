@@ -127,7 +127,7 @@ class WhatsAppIntegration {
         const isConflict = errorMessage.includes('conflict') || 
                           errorMessage.includes('replaced') || 
                           lastError?.toString().includes('conflict') ||
-                          JSON.stringify(lastError).includes('conflict');
+                          (lastError && JSON.stringify(lastError).includes('conflict'));
         
         if (isConflict) {
           console.warn('⚠️ CONFLITO DE SESSÃO detectado! Outra instância WhatsApp está ativa.');
@@ -313,7 +313,7 @@ class WhatsAppIntegration {
   // =====================================================================
   public getStatus(): WhatsAppStatus {
     const uptime = Math.round((Date.now() - this.clientStartTime) / 1000);
-    const isReady = this.sock && (this.clientStatus === 'Conectado' || this.clientStatus.includes('CONFLITO'));
+    const isReady = this.clientStatus === 'Conectado';
 
     return {
       status: this.clientStatus,
