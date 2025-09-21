@@ -358,8 +358,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate contract PDF route
   app.post('/api/sales/:id/generate-contract', isAuthenticated, async (req, res) => {
     try {
+      console.log("=== START CONTRACT GENERATION ===");
       const id = parseInt(req.params.id);
+      console.log("Sale ID:", id);
       if (isNaN(id) || id <= 0) {
+        console.log("Invalid sale ID:", id);
         return res.status(400).json({ message: "Invalid sale ID" });
       }
 
