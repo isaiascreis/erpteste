@@ -4,8 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +30,19 @@ import {
   User,
   Loader2,
   Plus,
-  UserPlus
+  UserPlus,
+  MapPin,
+  Mail,
+  Calendar,
+  Tag,
+  Clock,
+  UserCheck,
+  Building2,
+  ChevronDown,
+  Settings,
+  Star,
+  Archive,
+  Users
 } from "lucide-react";
 
 interface Message {
@@ -40,13 +56,15 @@ interface Message {
   timestamp: string;
   status: 'sent' | 'delivered' | 'read' | 'received';
   createdAt: string;
+  sentByUserId?: string;
 }
 
 interface Conversation {
   id: number;
   phone: string;
   name: string;
-  lastMessageTime?: string;  // Corrigido para coincidir com a API
+  avatar?: string;
+  lastMessageTime?: string;
   createdAt: string;
   lastMessage?: {
     content: string;
@@ -54,6 +72,27 @@ interface Conversation {
     timestamp: string;
   };
   unreadCount?: number;
+  assignedUserId?: string;
+  isAssigned?: boolean;
+  departmentId?: string;
+  priority?: 'normal' | 'high' | 'urgent';
+  tags?: string[];
+  clientId?: number;
+  client?: {
+    id: number;
+    nome: string;
+    email?: string;
+    telefone?: string;
+    endereco?: string;
+    cidade?: string;
+  };
+}
+
+interface User {
+  id: string;
+  email: string;
+  nome: string;
+  systemRole: string;
 }
 
 // Schema para novo contato
@@ -69,24 +108,103 @@ type NewContactFormData = z.infer<typeof newContactSchema>;
 
 export function ChatInterface() {
   const { toast } = useToast();
-
-  // Buscar conversas reais do banco com polling automático
-  const { data: conversations = [], isLoading: conversationsLoading } = useQuery<Conversation[]>({
-    queryKey: ['/api/whatsapp/conversations'],
-    refetchInterval: 3000, // Atualiza a cada 3 segundos
-    refetchIntervalInBackground: true,
-  });
-
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [isRecording, setIsRecording] = useState(false);
-  const [showNewContactForm, setShowNewContactForm] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [showNewContactDialog, setShowNewContactDialog] = useState(false);
+  const [showClientDetails, setShowClientDetails] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Buscar conversas reais do banco com polling automático
+  const { data: conversations = [], isLoading: conversationsLoading } = useQuery<Conversation[]>({
+    queryKey: ['/api/whatsapp/conversations'],
+    refetchInterval: 3000,
+  });
+
+  // Buscar usuários para atribuição (desabilitado por enquanto)
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ['/api/users'],
+    enabled: false, // Desabilitar por enquanto pois retorna 401
+  });
+
+  // Buscar mensagens da conversa selecionada
+  const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
+    queryKey: ['/api/whatsapp/conversations', selectedConversation?.id, 'messages'],
+    enabled: !!selectedConversation,
+    refetchInterval: 2000,
+  });
+
+  // Status do servidor WhatsApp
+  const { data: whatsappStatus } = useQuery({
+    queryKey: ['/api/whatsapp/status'],
+    refetchInterval: 10000,
+  });
+
+  // Mutation para enviar mensagem
+  const sendMessageMutation = useMutation({
+    mutationFn: async (data: { phone: string; message: string }) => {
+      return apiRequest('/api/whatsapp/send', 'POST', data);
+    },
+    onSuccess: () => {
+      setNewMessage("");
+      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations'] });
+      if (selectedConversation) {
+        queryClient.invalidateQueries({ 
+          queryKey: ['/api/whatsapp/conversations', selectedConversation.id, 'messages'] 
+        });
+      }
+      scrollToBottom();
+    },
+    onError: (error: any) => {
+      console.error("Error sending message:", error);
+      toast({
+        title: "Erro ao enviar mensagem",
+        description: error.message || "Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation para criar nova conversa
+  const createConversationMutation = useMutation({
+    mutationFn: async (data: NewContactFormData) => {
+      // Primeiro criar a conversa
+      const conversation = await apiRequest('/api/whatsapp/conversations', 'POST', {
+        phone: data.phone,
+        name: data.name
+      });
+      
+      // Depois enviar a mensagem inicial
+      await apiRequest('/api/whatsapp/send', 'POST', {
+        phone: data.phone,
+        message: data.message
+      });
+      
+      return conversation;
+    },
+    onSuccess: (newConversation) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations'] });
+      setSelectedConversation(newConversation);
+      setShowNewContactDialog(false);
+      form.reset();
+      toast({
+        title: "Conversa criada",
+        description: "Conversa criada e mensagem enviada com sucesso!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao criar conversa",
+        description: error.message || "Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Form para novo contato
-  const newContactForm = useForm<NewContactFormData>({
+  const form = useForm<NewContactFormData>({
     resolver: zodResolver(newContactSchema),
     defaultValues: {
       phone: "",
@@ -95,237 +213,139 @@ export function ChatInterface() {
     },
   });
 
-  // Buscar mensagens da conversa selecionada com polling automático
-  const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
-    queryKey: ['/api/whatsapp/conversations', selectedConversation?.id, 'messages'],
-    enabled: !!selectedConversation?.id,
-    refetchInterval: 2000, // Atualiza a cada 2 segundos
-    refetchIntervalInBackground: true,
-  });
-
-  // Mutation para enviar mensagem
-  const sendMessageMutation = useMutation({
-    mutationFn: async (data: { conversationId: number; content: string }) => {
-      const response = await apiRequest('POST', '/api/whatsapp/send', {
-        phone: selectedConversation?.phone,
-        message: data.content,
-      });
-      return response;
-    },
-    onSuccess: () => {
-      setNewMessage('');
-      // Invalidar queries para recarregar dados
-      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations', selectedConversation?.id, 'messages'] });
-      toast({
-        title: "Mensagem enviada",
-        description: "Sua mensagem foi enviada com sucesso.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Erro ao enviar mensagem",
-        description: "Não foi possível enviar a mensagem. Tente novamente.",
-        variant: "destructive",
-      });
-      console.error('Erro ao enviar mensagem:', error);
-    },
-  });
-
-  // Mutation para criar nova conversa e enviar primeira mensagem
-  const createConversationMutation = useMutation({
-    mutationFn: async (data: NewContactFormData) => {
-      // Primeiro cria ou busca a conversa
-      const conversation = await apiRequest('POST', '/api/whatsapp/conversations', {
-        phone: data.phone,
-        name: data.name,
-      });
-      
-      try {
-        // Tenta enviar a mensagem
-        await apiRequest('POST', '/api/whatsapp/send', {
-          phone: data.phone,
-          message: data.message,
-        });
-        return { conversation, messageSent: true };
-      } catch (error) {
-        // Se falhar o envio, retorna a conversa mas indica falha na mensagem
-        console.warn('Falha ao enviar mensagem inicial:', error);
-        return { conversation, messageSent: false };
-      }
-    },
-    onSuccess: (result) => {
-      if (result.messageSent) {
-        toast({
-          title: "Conversa criada",
-          description: "Nova conversa criada e mensagem enviada com sucesso.",
-        });
-      } else {
-        toast({
-          title: "Conversa criada com aviso",
-          description: "Conversa criada, mas houve problema no envio da mensagem. O servidor WhatsApp pode estar indisponível.",
-          variant: "destructive",
-        });
-      }
-      setShowNewContactForm(false);
-      newContactForm.reset();
-      setSelectedConversation(result.conversation as unknown as Conversation);
-      // Invalidar queries para recarregar dados
-      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations'] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Erro ao criar conversa",
-        description: "Não foi possível criar a conversa. Verifique o número e tente novamente.",
-        variant: "destructive",
-      });
-      console.error('Erro ao criar conversa:', error);
-    },
-  });
-
-  // Auto-scroll quando novas mensagens chegam
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const filteredConversations = conversations.filter((conv: Conversation) =>
-    conv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    conv.phone.includes(searchTerm)
-  );
-
-  // Calcular contadores não lidas
-  const unreadCount = conversations.reduce((acc: number, conv: Conversation) => 
-    acc + (conv.unreadCount || 0), 0
-  );
-
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedConversation || sendMessageMutation.isPending) return;
-
-    sendMessageMutation.mutate({
-      conversationId: selectedConversation.id,
-      content: newMessage.trim(),
-    });
-    
-    // Auto-resize textarea
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setNewMessage(e.target.value);
-    
-    // Auto-resize
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-    }
-  };
-
-  const toggleRecording = () => {
-    setIsRecording(!isRecording);
-    // In a real implementation, you would start/stop audio recording here
-  };
-
-  const handleCreateContact = (data: NewContactFormData) => {
+  const onSubmit = (data: NewContactFormData) => {
     createConversationMutation.mutate(data);
   };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('pt-BR', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+  // Funções utilitárias
+  const formatPhone = (phone: string) => {
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 13 && cleaned.startsWith('55')) {
+      return `+55 (${cleaned.slice(2, 4)}) ${cleaned.slice(4, 9)}-${cleaned.slice(9)}`;
+    }
+    return phone;
+  };
+
+  const formatTime = (timestamp: string) => {
+    return new Date(timestamp).toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
-  const formatLastMessageTime = (dateString: string) => {
-    const date = new Date(dateString);
+  const formatLastMessageTime = (timestamp: string) => {
+    const date = new Date(timestamp);
     const now = new Date();
-    const diffInMs = now.getTime() - date.getTime();
-    const diffInHours = diffInMs / (1000 * 60 * 60);
+    const diff = now.getTime() - date.getTime();
+    const diffHours = diff / (1000 * 60 * 60);
     
-    if (diffInHours < 1) {
-      const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-      return `${diffInMinutes}min`;
-    } else if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)}h`;
+    if (diffHours < 24) {
+      return formatTime(timestamp);
+    } else if (diffHours < 48) {
+      return 'Ontem';
     } else {
       return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
     }
   };
 
-  // Função para formatear telefone de forma legível
-  const formatPhone = (phone: string | undefined | null) => {
-    if (!phone) return 'Número não disponível';
-    
-    // Remove @c.us se presente
-    const cleanPhone = phone.replace('@c.us', '');
-    // Adiciona formatação brasileira se for número brasileiro
-    if (cleanPhone.startsWith('55') && cleanPhone.length >= 12) {
-      const ddd = cleanPhone.substring(2, 4);
-      const number = cleanPhone.substring(4);
-      const formatted = `+55 ${ddd} ${number.substring(0, 5)}-${number.substring(5)}`;
-      return formatted;
+  const handleSendMessage = () => {
+    if (selectedConversation && newMessage.trim()) {
+      sendMessageMutation.mutate({
+        phone: selectedConversation.phone,
+        message: newMessage.trim()
+      });
     }
-    return cleanPhone;
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const toggleRecording = () => {
+    setIsRecording(!isRecording);
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setNewMessage(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  };
+
+  // Verificação segura para evitar erro de null pointer
+  const safeConversations = Array.isArray(conversations) ? conversations : [];
+  const filteredConversations = safeConversations.filter(conversation =>
+    conversation.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    conversation.phone.includes(searchTerm)
+  );
+
+  const getPriorityColor = (priority?: string) => {
+    switch (priority) {
+      case 'high': return 'bg-orange-500';
+      case 'urgent': return 'bg-red-500';
+      default: return 'bg-blue-500';
+    }
+  };
+
+  const getInitials = (name: string) => {
+    if (!name || typeof name !== 'string') return 'U';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  console.log("WhatsApp server status:", whatsappStatus?.status);
+
   return (
-    <div className="chat-layout" data-testid="chat-interface">
-      {/* Chat Sidebar */}
-      <div className="chat-sidebar" data-testid="chat-sidebar">
-        {/* Sidebar Header */}
-        <div className="p-4 border-b border-border" data-testid="sidebar-header">
+    <div className="h-screen flex bg-background">
+      {/* Sidebar Esquerda - Lista de Conversas */}
+      <div className="w-80 border-r border-border flex flex-col bg-card">
+        {/* Header da Sidebar */}
+        <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-foreground">Conversas</h3>
             <div className="flex items-center space-x-2">
-              <Badge className="bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
-                {conversationsLoading ? (
-                  <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                ) : (
-                  `${unreadCount} não lidas`
-                )}
-              </Badge>
-              
-              <Dialog open={showNewContactForm} onOpenChange={setShowNewContactForm}>
+              <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                <MessageSquare className="w-5 h-5 text-white" />
+              </div>
+              <h1 className="text-xl font-semibold text-foreground">WhatsApp</h1>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Dialog open={showNewContactDialog} onOpenChange={setShowNewContactDialog}>
                 <DialogTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 w-8 p-0"
-                    data-testid="button-new-conversation"
-                  >
+                  <Button variant="outline" size="sm" data-testid="button-new-chat">
                     <Plus className="w-4 h-4" />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Nova Conversa</DialogTitle>
                     <DialogDescription>
-                      Adicione um novo contato e envie uma mensagem inicial.
+                      Inicie uma nova conversa no WhatsApp
                     </DialogDescription>
                   </DialogHeader>
-                  <Form {...newContactForm}>
-                    <form onSubmit={newContactForm.handleSubmit(handleCreateContact)} className="space-y-4">
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                       <FormField
-                        control={newContactForm.control}
+                        control={form.control}
                         name="phone"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Número do WhatsApp</FormLabel>
                             <FormControl>
                               <Input
+                                placeholder="Ex: 5564999999999"
                                 {...field}
-                                placeholder="Ex: +5511999999999 ou 11999999999"
-                                data-testid="input-new-phone"
+                                data-testid="input-phone"
                               />
                             </FormControl>
                             <FormMessage />
@@ -333,16 +353,16 @@ export function ChatInterface() {
                         )}
                       />
                       <FormField
-                        control={newContactForm.control}
+                        control={form.control}
                         name="name"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Nome do Contato</FormLabel>
                             <FormControl>
                               <Input
+                                placeholder="Nome do cliente"
                                 {...field}
-                                placeholder="Ex: João Silva"
-                                data-testid="input-new-name"
+                                data-testid="input-name"
                               />
                             </FormControl>
                             <FormMessage />
@@ -350,17 +370,16 @@ export function ChatInterface() {
                         )}
                       />
                       <FormField
-                        control={newContactForm.control}
+                        control={form.control}
                         name="message"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Mensagem Inicial</FormLabel>
                             <FormControl>
                               <Textarea
+                                placeholder="Olá! Como posso ajudá-lo?"
                                 {...field}
-                                placeholder="Digite a primeira mensagem que será enviada..."
-                                rows={3}
-                                data-testid="input-new-message"
+                                data-testid="input-initial-message"
                               />
                             </FormControl>
                             <FormMessage />
@@ -371,7 +390,7 @@ export function ChatInterface() {
                         <Button
                           type="button"
                           variant="outline"
-                          onClick={() => setShowNewContactForm(false)}
+                          onClick={() => setShowNewContactDialog(false)}
                           data-testid="button-cancel-new-conversation"
                         >
                           Cancelar
@@ -398,12 +417,20 @@ export function ChatInterface() {
                   </Form>
                 </DialogContent>
               </Dialog>
+              <Button variant="outline" size="sm">
+                <Archive className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="sm">
+                <Settings className="w-4 h-4" />
+              </Button>
             </div>
           </div>
+          
+          {/* Barra de Pesquisa */}
           <div className="relative">
             <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar conversas..."
+              placeholder="Pesquisar conversas..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -412,215 +439,448 @@ export function ChatInterface() {
           </div>
         </div>
 
-        {/* Conversations List */}
-        <div className="conversations-list-container" data-testid="conversations-list">
-          {conversationsLoading ? (
-            <div className="p-8 text-center">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">Carregando conversas...</p>
-            </div>
-          ) : filteredConversations.length > 0 ? (
-            filteredConversations.map((conversation: Conversation) => (
-              <div
-                key={conversation.id}
-                className={`p-4 border-b border-border hover:bg-muted cursor-pointer transition-colors ${
-                  selectedConversation?.id === conversation.id ? 'bg-accent' : ''
-                }`}
-                onClick={() => setSelectedConversation(conversation)}
-                data-testid={`conversation-${conversation.id}`}
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-medium">
-                      <User className="w-6 h-6" />
-                    </div>
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium text-foreground truncate" data-testid={`conversation-name-${conversation.id}`}>
-                        {conversation.name}
-                      </p>
-                      {conversation.lastMessageTime && (
-                        <span className="text-xs text-muted-foreground" data-testid={`conversation-time-${conversation.id}`}>
-                          {formatLastMessageTime(conversation.lastMessageTime)}
-                        </span>
+        {/* Lista de Conversas */}
+        <ScrollArea className="flex-1">
+          <div className="conversations-list-container" data-testid="conversations-list">
+            {conversationsLoading ? (
+              <div className="p-8 text-center">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground">Carregando conversas...</p>
+              </div>
+            ) : filteredConversations.length > 0 ? (
+              filteredConversations.map((conversation: Conversation) => (
+                <div
+                  key={conversation.id}
+                  className={`p-4 border-b border-border hover:bg-muted cursor-pointer transition-colors ${
+                    selectedConversation?.id === conversation.id ? 'bg-accent border-l-4 border-l-primary' : ''
+                  }`}
+                  onClick={() => setSelectedConversation(conversation)}
+                  data-testid={`conversation-${conversation.id}`}
+                >
+                  <div className="flex items-start space-x-3">
+                    <div className="relative">
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={conversation.avatar} />
+                        <AvatarFallback className="bg-primary text-primary-foreground">
+                          {getInitials(conversation.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+                      {conversation.priority && conversation.priority !== 'normal' && (
+                        <div className={`absolute -top-1 -left-1 w-3 h-3 ${getPriorityColor(conversation.priority)} rounded-full`}></div>
                       )}
                     </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground truncate" data-testid={`conversation-last-message-${conversation.id}`}>
-                        {conversation.lastMessage?.content || formatPhone(conversation.phone)}
-                      </p>
-                      {(conversation.unreadCount || 0) > 0 && (
-                        <Badge 
-                          className="bg-emerald-500 text-white text-xs px-2 py-1 rounded-full min-w-[20px] h-5 flex items-center justify-center"
-                          data-testid={`conversation-unread-${conversation.id}`}
-                        >
-                          {conversation.unreadCount}
-                        </Badge>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="font-medium text-foreground truncate" data-testid={`conversation-name-${conversation.id}`}>
+                          {conversation.name}
+                        </p>
+                        {conversation.lastMessageTime && (
+                          <span className="text-xs text-muted-foreground" data-testid={`conversation-time-${conversation.id}`}>
+                            {formatLastMessageTime(conversation.lastMessageTime)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground truncate" data-testid={`conversation-last-message-${conversation.id}`}>
+                          {conversation.lastMessage?.content || formatPhone(conversation.phone)}
+                        </p>
+                        <div className="flex items-center space-x-1">
+                          {conversation.isAssigned && (
+                            <UserCheck className="w-3 h-3 text-blue-500" />
+                          )}
+                          {(conversation.unreadCount || 0) > 0 && (
+                            <Badge 
+                              className="bg-green-500 text-white text-xs px-2 py-1 rounded-full min-w-[20px] h-5 flex items-center justify-center"
+                              data-testid={`conversation-unread-${conversation.id}`}
+                            >
+                              {conversation.unreadCount}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      {conversation.tags && Array.isArray(conversation.tags) && conversation.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {conversation.tags.slice(0, 2).map((tag, index) => (
+                            <Badge key={index} variant="secondary" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="p-8 text-center text-muted-foreground" data-testid="no-conversations">
+                <MessageSquare className="w-12 h-12 mx-auto mb-4" />
+                <p>Nenhuma conversa encontrada</p>
+                <p className="text-xs mt-2">
+                  As conversas aparecerão automaticamente quando mensagens chegarem do WhatsApp
+                </p>
               </div>
-            ))
-          ) : (
-            <div className="p-8 text-center text-muted-foreground" data-testid="no-conversations">
-              <MessageSquare className="w-12 h-12 mx-auto mb-4" />
-              <p>Nenhuma conversa encontrada</p>
-              <p className="text-xs mt-2">
-                As conversas aparecerão automaticamente quando mensagens chegarem do WhatsApp
-              </p>
-            </div>
-          )}
+            )}
+          </div>
+        </ScrollArea>
+
+        {/* Status do WhatsApp */}
+        <div className="p-3 border-t border-border">
+          <div className="flex items-center space-x-2">
+            <div className={`w-2 h-2 rounded-full ${
+              whatsappStatus?.status === 'Conectado' ? 'bg-green-500' : 
+              whatsappStatus?.status?.includes('CONFLITO') ? 'bg-red-500' : 'bg-yellow-500'
+            }`}></div>
+            <span className="text-xs text-muted-foreground">
+              WhatsApp: {whatsappStatus?.status || 'Verificando...'}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Chat Main */}
-      <div className="chat-main" data-testid="chat-main">
+      {/* Área Central - Chat */}
+      <div className="flex-1 flex flex-col">
         {selectedConversation ? (
-          <div className="chat-window h-full flex flex-col">
-            {/* Chat Header */}
-            <div className="chat-header flex items-center justify-between" data-testid="chat-header">
-              <div className="flex items-center space-x-3">
-                <div className="relative">
-                  <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-medium">
-                    <User className="w-5 h-5" />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
-                </div>
-                <div>
-                  <p className="font-medium text-foreground" data-testid="chat-contact-name">
-                    {selectedConversation.name}
-                  </p>
-                  <p className="text-sm text-muted-foreground" data-testid="chat-contact-phone">
-                    {formatPhone(selectedConversation.phone)}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button variant="ghost" size="sm" data-testid="button-call">
-                  <Phone className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" data-testid="button-video">
-                  <Video className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" data-testid="button-more">
-                  <MoreVertical className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Messages */}
-            <div className="chat-messages flex-1 space-y-4" data-testid="chat-messages">
-              {messagesLoading ? (
-                <div className="flex justify-center items-center h-32">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-muted-foreground">Carregando mensagens...</span>
-                </div>
-              ) : messages.length > 0 ? (
-                messages.map((message: Message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.fromMe ? 'justify-end' : 'justify-start'}`}
-                    data-testid={`message-${message.id}`}
-                  >
-                    <div
-                      className={`message-bubble ${message.fromMe ? 'sent' : 'received'}`}
-                    >
-                      <p>{message.content}</p>
-                      <p className={`text-xs mt-1 ${message.fromMe ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                        {formatTime(message.timestamp)}
-                        {message.fromMe && (
-                          <span className="ml-2">
-                            {message.status === 'sent' && '✓'}
-                            {message.status === 'delivered' && '✓✓'}
-                            {message.status === 'read' && '✓✓'}
-                          </span>
-                        )}
-                      </p>
+          <>
+            {/* Header do Chat */}
+            <div className="p-4 border-b border-border bg-card" data-testid="chat-header">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Avatar className="w-10 h-10">
+                    <AvatarImage src={selectedConversation.avatar} />
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      {getInitials(selectedConversation.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium text-foreground" data-testid="chat-contact-name">
+                      {selectedConversation.name}
+                    </p>
+                    <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                      <span data-testid="chat-contact-phone">
+                        {formatPhone(selectedConversation.phone)}
+                      </span>
+                      {selectedConversation.isAssigned && (
+                        <>
+                          <span>•</span>
+                          <span className="text-blue-600">Atribuído</span>
+                        </>
+                      )}
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="flex justify-center items-center h-32 text-center text-muted-foreground">
-                  <div>
-                    <MessageSquare className="w-12 h-12 mx-auto mb-2" />
-                    <p>Nenhuma mensagem ainda</p>
-                    <p className="text-xs">Inicie a conversa enviando uma mensagem</p>
-                  </div>
                 </div>
-              )}
-              <div ref={messagesEndRef} />
+                <div className="flex items-center space-x-2">
+                  <Button variant="ghost" size="sm" data-testid="button-call">
+                    <Phone className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" data-testid="button-video">
+                    <Video className="w-4 h-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setShowClientDetails(!showClientDetails)}
+                    data-testid="button-toggle-details"
+                  >
+                    <Users className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" data-testid="button-more">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
 
-            {/* Chat Input */}
-            <div className="chat-input-area" data-testid="chat-input-area">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="chat-tool-btn"
-                data-testid="button-emoji"
-              >
-                <Smile className="w-5 h-5" />
-              </Button>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                className="chat-tool-btn"
-                data-testid="button-attach"
-              >
-                <Paperclip className="w-5 h-5" />
-              </Button>
-              
-              <Textarea
-                ref={textareaRef}
-                placeholder="Digite sua mensagem..."
-                value={newMessage}
-                onChange={handleTextareaChange}
-                onKeyPress={handleKeyPress}
-                className="flex-1 resize-none min-h-[40px] max-h-[120px]"
-                data-testid="input-message"
-                disabled={sendMessageMutation.isPending}
-              />
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`chat-tool-btn ${isRecording ? 'text-red-500' : ''}`}
-                onClick={toggleRecording}
-                data-testid="button-record"
-              >
-                {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-              </Button>
-              
-              <Button
-                onClick={handleSendMessage}
-                disabled={!newMessage.trim() || sendMessageMutation.isPending}
-                size="sm"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-10 h-10 p-0"
-                data-testid="button-send"
-              >
-                {sendMessageMutation.isPending ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+            {/* Área de Mensagens */}
+            <ScrollArea className="flex-1 p-4">
+              <div className="space-y-4" data-testid="chat-messages">
+                {messagesLoading ? (
+                  <div className="flex justify-center items-center h-32">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-muted-foreground">Carregando mensagens...</span>
+                  </div>
+                ) : Array.isArray(messages) && messages.length > 0 ? (
+                  messages.map((message: Message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${message.fromMe ? 'justify-end' : 'justify-start'}`}
+                      data-testid={`message-${message.id}`}
+                    >
+                      <div className={`max-w-[70%] ${message.fromMe ? 'order-2' : 'order-1'}`}>
+                        <div
+                          className={`rounded-2xl px-4 py-2 ${
+                            message.fromMe 
+                              ? 'bg-blue-500 text-white rounded-br-sm' 
+                              : 'bg-card border border-border rounded-bl-sm'
+                          }`}
+                        >
+                          <p className="text-sm leading-relaxed">{message.content}</p>
+                          <div className={`flex items-center justify-end mt-1 space-x-1 ${
+                            message.fromMe ? 'text-blue-100' : 'text-muted-foreground'
+                          }`}>
+                            <span className="text-xs">
+                              {formatTime(message.timestamp)}
+                            </span>
+                            {message.fromMe && (
+                              <span className="text-xs">
+                                {message.status === 'sent' && '✓'}
+                                {message.status === 'delivered' && '✓✓'}
+                                {message.status === 'read' && <span className="text-blue-200">✓✓</span>}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
                 ) : (
-                  <Send className="w-5 h-5" />
+                  <div className="flex justify-center items-center h-32 text-center text-muted-foreground">
+                    <div>
+                      <MessageSquare className="w-12 h-12 mx-auto mb-2" />
+                      <p>Nenhuma mensagem ainda</p>
+                      <p className="text-xs mt-1">Inicie a conversa enviando uma mensagem</p>
+                    </div>
+                  </div>
                 )}
-              </Button>
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+
+            {/* Input de Mensagem */}
+            <div className="p-4 border-t border-border bg-card" data-testid="chat-input-area">
+              <div className="flex items-end space-x-2">
+                <Button variant="ghost" size="sm" data-testid="button-emoji">
+                  <Smile className="w-5 h-5" />
+                </Button>
+                
+                <Button variant="ghost" size="sm" data-testid="button-attach">
+                  <Paperclip className="w-5 h-5" />
+                </Button>
+                
+                <div className="flex-1 relative">
+                  <Textarea
+                    ref={textareaRef}
+                    placeholder="Digite sua mensagem..."
+                    value={newMessage}
+                    onChange={handleTextareaChange}
+                    onKeyPress={handleKeyPress}
+                    className="resize-none min-h-[40px] max-h-[120px] pr-12"
+                    data-testid="input-message"
+                    disabled={sendMessageMutation.isPending}
+                  />
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={!newMessage.trim() || sendMessageMutation.isPending}
+                    size="sm"
+                    className="absolute bottom-2 right-2 bg-blue-500 hover:bg-blue-600 text-white rounded-full w-8 h-8 p-0"
+                    data-testid="button-send"
+                  >
+                    {sendMessageMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`${isRecording ? 'text-red-500' : ''}`}
+                  onClick={toggleRecording}
+                  data-testid="button-record"
+                >
+                  {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                </Button>
+              </div>
             </div>
-          </div>
+          </>
         ) : (
-          <div className="chat-welcome" data-testid="chat-welcome">
-            <MessageSquare className="w-16 h-16 text-primary mb-4" />
-            <h2 className="text-2xl font-semibold text-foreground mb-2">Bem-vindo ao Chat</h2>
-            <p className="text-muted-foreground">Selecione uma conversa para começar.</p>
-            <p className="text-xs text-muted-foreground mt-2">
-              As mensagens do WhatsApp aparecerão automaticamente aqui
-            </p>
+          <div className="flex-1 flex items-center justify-center text-center" data-testid="chat-welcome">
+            <div>
+              <MessageSquare className="w-16 h-16 text-primary mx-auto mb-4" />
+              <h2 className="text-2xl font-semibold text-foreground mb-2">Bem-vindo ao WhatsApp Business</h2>
+              <p className="text-muted-foreground">Selecione uma conversa para começar o atendimento.</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                As mensagens aparecerão automaticamente conforme chegam
+              </p>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Sidebar Direita - Detalhes do Cliente */}
+      {selectedConversation && showClientDetails && (
+        <div className="w-80 border-l border-border bg-card flex flex-col">
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-foreground">Detalhes do Cliente</h3>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setShowClientDetails(false)}
+              >
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          <ScrollArea className="flex-1">
+            <div className="p-4 space-y-6">
+              {/* Informações do Cliente */}
+              <div className="text-center">
+                <Avatar className="w-20 h-20 mx-auto mb-4">
+                  <AvatarImage src={selectedConversation.avatar} />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                    {getInitials(selectedConversation.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <h4 className="font-semibold text-lg text-foreground">{selectedConversation.name}</h4>
+                <p className="text-sm text-muted-foreground">{formatPhone(selectedConversation.phone)}</p>
+                {selectedConversation.isAssigned && (
+                  <Badge className="mt-2 bg-blue-100 text-blue-800">
+                    <UserCheck className="w-3 h-3 mr-1" />
+                    Atribuído
+                  </Badge>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Informações de Contato */}
+              <div>
+                <h5 className="font-medium text-foreground mb-3 flex items-center">
+                  <Phone className="w-4 h-4 mr-2" />
+                  Contato
+                </h5>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center space-x-2">
+                    <Phone className="w-3 h-3 text-muted-foreground" />
+                    <span>{formatPhone(selectedConversation.phone)}</span>
+                  </div>
+                  {selectedConversation.client?.email && (
+                    <div className="flex items-center space-x-2">
+                      <Mail className="w-3 h-3 text-muted-foreground" />
+                      <span>{selectedConversation.client.email}</span>
+                    </div>
+                  )}
+                  {selectedConversation.client?.endereco && (
+                    <div className="flex items-center space-x-2">
+                      <MapPin className="w-3 h-3 text-muted-foreground" />
+                      <span className="text-xs">{selectedConversation.client.endereco}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Atendimento */}
+              <div>
+                <h5 className="font-medium text-foreground mb-3 flex items-center">
+                  <UserCheck className="w-4 h-4 mr-2" />
+                  Atendimento
+                </h5>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Atendente</label>
+                    <Select>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Atribuir atendente" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.isArray(users) && users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.nome} ({user.systemRole})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Prioridade</label>
+                    <Select>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Normal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="normal">Normal</SelectItem>
+                        <SelectItem value="high">Alta</SelectItem>
+                        <SelectItem value="urgent">Urgente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Tags */}
+              <div>
+                <h5 className="font-medium text-foreground mb-3 flex items-center">
+                  <Tag className="w-4 h-4 mr-2" />
+                  Tags
+                </h5>
+                <div className="flex flex-wrap gap-2">
+                  {selectedConversation.tags && Array.isArray(selectedConversation.tags) && selectedConversation.tags.length > 0 ? (
+                    selectedConversation.tags.map((tag, index) => (
+                      <Badge key={index} variant="secondary" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))
+                  ) : (
+                    <Button variant="outline" size="sm" className="text-xs">
+                      <Plus className="w-3 h-3 mr-1" />
+                      Adicionar Tag
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Histórico */}
+              <div>
+                <h5 className="font-medium text-foreground mb-3 flex items-center">
+                  <Clock className="w-4 h-4 mr-2" />
+                  Histórico
+                </h5>
+                <div className="space-y-2 text-xs text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>Primeira mensagem:</span>
+                    <span>{new Date(selectedConversation.createdAt).toLocaleDateString('pt-BR')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Última atividade:</span>
+                    <span>
+                      {selectedConversation.lastMessageTime 
+                        ? formatLastMessageTime(selectedConversation.lastMessageTime)
+                        : 'Nunca'
+                      }
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ações */}
+              <div className="space-y-2">
+                <Button variant="outline" className="w-full justify-start text-sm">
+                  <Building2 className="w-4 h-4 mr-2" />
+                  Ver no CRM
+                </Button>
+                <Button variant="outline" className="w-full justify-start text-sm">
+                  <Star className="w-4 h-4 mr-2" />
+                  Marcar como Favorito
+                </Button>
+                <Button variant="outline" className="w-full justify-start text-sm">
+                  <Archive className="w-4 h-4 mr-2" />
+                  Arquivar Conversa
+                </Button>
+              </div>
+            </div>
+          </ScrollArea>
+        </div>
+      )}
     </div>
   );
 }
