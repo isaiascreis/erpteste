@@ -620,10 +620,13 @@ export class DatabaseStorage implements IStorage {
       // Create passengers
       if (saleData.passengers?.length) {
         for (const passenger of saleData.passengers) {
-          await tx.insert(passengers).values({
-            vendaId: sale.id,
-            ...passenger,
-          });
+          // Only create passengers with valid names
+          if (passenger.nome && passenger.nome.trim()) {
+            await tx.insert(passengers).values({
+              vendaId: sale.id,
+              ...passenger,
+            });
+          }
         }
       }
 
@@ -681,10 +684,13 @@ export class DatabaseStorage implements IStorage {
       await tx.delete(passengers).where(eq(passengers.vendaId, id));
       if (saleData.passengers?.length) {
         for (const passenger of saleData.passengers) {
-          await tx.insert(passengers).values({
-            vendaId: id,
-            ...passenger,
-          });
+          // Only create passengers with valid names
+          if (passenger.nome && passenger.nome.trim()) {
+            await tx.insert(passengers).values({
+              vendaId: id,
+              ...passenger,
+            });
+          }
         }
       }
 
