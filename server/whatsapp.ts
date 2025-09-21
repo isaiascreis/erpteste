@@ -3,7 +3,8 @@
 // Servidor WhatsApp rodando dentro do mesmo processo do ERP
 // =====================================================================
 
-import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
+import pkg from 'whatsapp-web.js';
+const { Client, LocalAuth, MessageMedia } = pkg;
 import qrcode from 'qrcode';
 import axios from 'axios';
 import path from 'path';

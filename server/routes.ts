@@ -424,7 +424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Error message:", error.message);
         console.error("Error stack:", error.stack);
       }
-      res.status(500).json({ message: "Failed to create bank account", error: error.message });
+      res.status(500).json({ message: "Failed to create bank account", error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
