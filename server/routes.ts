@@ -599,6 +599,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/payment-plans', isAuthenticated, async (req, res) => {
+    try {
+      const { saleId } = req.query;
+      const paymentPlans = await storage.getPaymentPlans(saleId ? parseInt(saleId as string) : undefined);
+      res.json(paymentPlans);
+    } catch (error) {
+      console.error("Error fetching payment plans:", error);
+      res.status(500).json({ message: "Failed to fetch payment plans" });
+    }
+  });
+
+  app.post('/api/payment-plans', isAuthenticated, async (req, res) => {
+    try {
+      const paymentPlanData = insertPaymentPlanSchema.parse(req.body);
+      const paymentPlan = await storage.createPaymentPlan(paymentPlanData);
+      res.json(paymentPlan);
+    } catch (error) {
+      console.error("Error creating payment plan:", error);
+      res.status(500).json({ message: "Failed to create payment plan" });
+    }
+  });
+
+  app.delete('/api/payment-plans/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid payment plan ID" });
+      }
+      await storage.deletePaymentPlan(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting payment plan:", error);
+      res.status(500).json({ message: "Failed to delete payment plan" });
+    }
+  });
+
   // Financial routes
   app.get('/api/financial-accounts', isAuthenticated, async (req, res) => {
     try {

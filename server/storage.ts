@@ -163,7 +163,10 @@ export interface IStorage {
   deleteNotification(id: number): Promise<void>;
 
   // Enhanced payment operations with financial sync
+  getPaymentPlans(saleId?: number): Promise<PaymentPlan[]>;
+  createPaymentPlan(paymentPlan: InsertPaymentPlan): Promise<PaymentPlan>;
   updatePaymentPlan(id: number, data: Partial<InsertPaymentPlan>): Promise<PaymentPlan>;
+  deletePaymentPlan(id: number): Promise<void>;
   liquidatePaymentPlan(id: number, liquidationData: { dataLiquidacao: Date; observacoes?: string }): Promise<{
     paymentPlan: PaymentPlan;
     financialAccount?: FinancialAccount;
@@ -1540,6 +1543,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Enhanced payment operations with financial sync
+  async getPaymentPlans(saleId?: number): Promise<PaymentPlan[]> {
+    if (saleId) {
+      return await db
+        .select()
+        .from(paymentPlans)
+        .where(eq(paymentPlans.vendaId, saleId))
+        .orderBy(asc(paymentPlans.dataVencimento));
+    } else {
+      return await db
+        .select()
+        .from(paymentPlans)
+        .orderBy(asc(paymentPlans.dataVencimento));
+    }
+  }
+
+  async createPaymentPlan(paymentPlan: InsertPaymentPlan): Promise<PaymentPlan> {
+    const [created] = await db
+      .insert(paymentPlans)
+      .values(paymentPlan)
+      .returning();
+    
+    return created;
+  }
+
+  async deletePaymentPlan(id: number): Promise<void> {
+    await db
+      .delete(paymentPlans)
+      .where(eq(paymentPlans.id, id));
+  }
+
   async updatePaymentPlan(id: number, data: Partial<InsertPaymentPlan>): Promise<PaymentPlan> {
     const [updated] = await db
       .update(paymentPlans)
