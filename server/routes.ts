@@ -355,6 +355,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate contract PDF route
+  app.post('/api/sales/:id/generate-contract', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid sale ID" });
+      }
+
+      // Fetch sale data with all related information
+      const sale = await storage.getSaleById(id);
+      if (!sale) {
+        return res.status(404).json({ message: "Sale not found" });
+      }
+
+      // Fetch contract clauses and templates
+      const contractClauses = await storage.getContractClauses("contrato");
+      const activeTemplate = await storage.getDocumentTemplates("contrato");
+      
+      if (!activeTemplate || activeTemplate.length === 0) {
+        return res.status(400).json({ message: "Nenhum template de contrato ativo encontrado. Configure um template nas configurações." });
+      }
+
+      const template = activeTemplate.find((t: any) => t.isActive) || activeTemplate[0];
+
+      // Generate contract HTML by replacing template variables
+      let contractHtml = template.htmlContent;
+
+      // Replace basic variables
+      contractHtml = contractHtml.replace(/\{\{nomeCliente\}\}/g, sale.client?.nome || 'Cliente não informado');
+      contractHtml = contractHtml.replace(/\{\{numeroVenda\}\}/g, sale.referencia || sale.id);
+      contractHtml = contractHtml.replace(/\{\{dataVenda\}\}/g, new Date(sale.createdAt || new Date()).toLocaleDateString('pt-BR'));
+      contractHtml = contractHtml.replace(/\{\{valorTotal\}\}/g, `R$ ${parseFloat(sale.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+
+      // Generate services list
+      let servicosHtml = '';
+      if (sale.services && sale.services.length > 0) {
+        servicosHtml = sale.services.map((service: any) => {
+          return `<li>${service.tipo}: ${service.descricao} - ${service.valorVenda ? `R$ ${parseFloat(service.valorVenda).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Valor não informado'}</li>`;
+        }).join('');
+        servicosHtml = `<ul>${servicosHtml}</ul>`;
+      } else {
+        servicosHtml = '<p>Nenhum serviço informado</p>';
+      }
+      contractHtml = contractHtml.replace(/\{\{servicos\}\}/g, servicosHtml);
+
+      // Generate passengers list
+      let passageirosHtml = '';
+      if (sale.passengers && sale.passengers.length > 0) {
+        passageirosHtml = sale.passengers.map((passenger: any) => {
+          return `<li>${passenger.nome}${passenger.cpf ? ` (CPF: ${passenger.cpf})` : ''}</li>`;
+        }).join('');
+        passageirosHtml = `<ul>${passageirosHtml}</ul>`;
+      } else {
+        passageirosHtml = '<p>Nenhum passageiro informado</p>';
+      }
+      contractHtml = contractHtml.replace(/\{\{passageiros\}\}/g, passageirosHtml);
+
+      // Add contract clauses
+      let clausulasHtml = '';
+      if (contractClauses && contractClauses.length > 0) {
+        const activeClauses = contractClauses.filter((clause: any) => clause.isActive).sort((a: any, b: any) => a.order - b.order);
+        clausulasHtml = activeClauses.map((clause: any, index: number) => {
+          return `<div class="clause"><h4>${index + 1}. ${clause.title}</h4><p>${clause.content}</p></div>`;
+        }).join('');
+      }
+      contractHtml = contractHtml.replace(/\{\{clausulas\}\}/g, clausulasHtml);
+
+      // Replace any remaining common variables
+      contractHtml = contractHtml.replace(/\{\{dataAtual\}\}/g, new Date().toLocaleDateString('pt-BR'));
+      contractHtml = contractHtml.replace(/\{\{emailCliente\}\}/g, sale.client?.email || 'Não informado');
+      contractHtml = contractHtml.replace(/\{\{telefoneCliente\}\}/g, sale.client?.telefone || 'Não informado');
+
+      // Return HTML content (for now, we'll send HTML - in a real implementation, you'd convert to PDF)
+      // TODO: Implement actual PDF generation using @react-pdf/renderer or puppeteer
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', `inline; filename="contrato-${sale.referencia || sale.id}.html"`);
+      res.send(contractHtml);
+
+    } catch (error) {
+      console.error("Error generating contract:", error);
+      res.status(500).json({ message: "Failed to generate contract" });
+    }
+  });
+
   // Sale requirements routes
   app.get('/api/sales/:id/requirements', isAuthenticated, async (req, res) => {
     try {

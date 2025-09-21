@@ -475,6 +475,72 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     },
   });
 
+  const generateContractMutation = useMutation({
+    mutationFn: async (saleId: number) => {
+      const response = await fetch(`/api/sales/${saleId}/generate-contract`, {
+        method: "POST",
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        // Handle unauthorized specifically for proper error handling
+        if (response.status === 401) {
+          throw new Error('401: Unauthorized');
+        }
+        
+        // Try to get error message from JSON response
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Erro ao gerar contrato');
+          }
+        } catch (jsonError) {
+          // If JSON parsing fails, use generic error
+        }
+        
+        throw new Error('Erro ao gerar contrato');
+      }
+      
+      // Return blob for PDF download
+      return response.blob();
+    },
+    onSuccess: (pdfBlob, saleId) => {
+      // Create download link for PDF
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `contrato-venda-${sale?.referencia || saleId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast({ title: "Contrato PDF gerado com sucesso!" });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Não autorizado",
+          description: "Você está deslogado. Fazendo login novamente...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ 
+        title: "Erro ao gerar contrato", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
   const createClientMutation = useMutation({
     mutationFn: async (data: z.infer<typeof clientSchema>) => {
       return await apiRequest("POST", "/api/clients", data);
@@ -795,6 +861,32 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     }
 
     confirmSaleMutation.mutate(sale.id);
+  };
+
+  const handleGenerateContract = () => {
+    if (!sale || !sale.id) {
+      toast({ 
+        title: "Erro", 
+        description: "Salve a venda antes de gerar o contrato",
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    if (!selectedClient) {
+      toast({ title: "Selecione um cliente", variant: "destructive" });
+      return;
+    }
+
+    if (services.length === 0) {
+      toast({ 
+        title: "Adicione pelo menos um serviço", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    generateContractMutation.mutate(sale.id);
   };
 
   const getStatusBadge = (status: string = "orcamento") => {
@@ -1498,6 +1590,18 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                     <Save className="w-4 h-4 mr-2" />
                     {sale ? "Atualizar Orçamento" : "Salvar Orçamento"}
                   </Button>
+                  {sale && sale.status === "venda" && (
+                    <Button
+                      onClick={handleGenerateContract}
+                      variant="outline"
+                      className="w-full border-blue-600 text-blue-600 hover:bg-blue-50"
+                      disabled={generateContractMutation.isPending}
+                      data-testid="button-generate-contract"
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      {generateContractMutation.isPending ? "Gerando..." : "Gerar Contrato PDF"}
+                    </Button>
+                  )}
                   <Button
                     onClick={handleConfirmSale}
                     variant="default"
