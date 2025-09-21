@@ -1,12 +1,19 @@
 // =====================================================================
 // MÓDULO WHATSAPP INTEGRADO - ERP MONDIAL TURISMO
 // Servidor WhatsApp rodando dentro do mesmo processo do ERP
+// Usando Baileys (compatível com Replit - sem Puppeteer)
 // =====================================================================
 
-import pkg from 'whatsapp-web.js';
-const { Client, LocalAuth, MessageMedia } = pkg;
+import makeWASocket, { 
+  DisconnectReason, 
+  useMultiFileAuthState,
+  WAMessageKey,
+  Browsers,
+  proto
+} from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode';
-import axios from 'axios';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { storage } from './storage';
@@ -18,12 +25,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Diretório para armazenar dados da sessão do WhatsApp
-const SESSION_DIR = path.join(__dirname, '..', '.wwebjs_auth');
+const SESSION_DIR = path.join(__dirname, '..', '.baileys_auth');
+
+// Garantir que o diretório de sessão existe
+if (!existsSync(SESSION_DIR)) {
+  mkdirSync(SESSION_DIR, { recursive: true });
+}
 
 // Configurações do webhook ERP
 const ERP_WEBHOOK_TOKEN = process.env.ERP_WEBHOOK_TOKEN || 'mundial-webhook-token-2025';
 
-console.log('🔗 Configurações WhatsApp integrado:');
+console.log('🔗 Configurações WhatsApp Baileys integrado:');
 console.log('📁 Diretório da sessão:', SESSION_DIR);
 console.log('🔑 Token configurado:', ERP_WEBHOOK_TOKEN ? 'Sim' : 'Não');
 
@@ -40,7 +52,7 @@ export interface WhatsAppStatus {
 }
 
 class WhatsAppIntegration {
-  private client: Client | null = null;
+  private sock: any = null;
   private qrCodeDataUrl: string = '';
   private clientStatus: string = 'Iniciando...';
   private clientStartTime: number = Date.now();
@@ -49,44 +61,33 @@ class WhatsAppIntegration {
   private maxReconnectAttempts: number = 5;
   private connectionCount: number = 0;
   private lastActivity?: Date;
-
   constructor() {
     this.initializeClient();
   }
 
   // =====================================================================
-  // 🚀 INICIALIZAÇÃO DO CLIENTE
+  // 🚀 INICIALIZAÇÃO DO CLIENTE BAILEYS
   // =====================================================================
   private async initializeClient() {
     try {
-      console.log('🚀 Inicializando cliente WhatsApp integrado...');
+      console.log('🚀 Inicializando cliente Baileys WhatsApp integrado...');
       
-      this.client = new Client({
-        authStrategy: new LocalAuth({
-          dataPath: SESSION_DIR
-        }),
-        puppeteer: {
-          headless: true,
-          timeout: 120000,
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-gpu',
-            '--memory-pressure-off'
-          ],
-        }
+      // Configurar autenticação multi-file
+      const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+
+      // Criar socket Baileys
+      this.sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false,
+        browser: Browsers.ubuntu('Chrome'),
+        generateHighQualityLinkPreview: true,
+        markOnlineOnConnect: true
       });
 
-      this.setupEventListeners();
-      await this.client.initialize();
+      this.setupEventListeners(saveCreds);
       
     } catch (error) {
-      console.error('❌ ERRO ao inicializar cliente WhatsApp:', error);
+      console.error('❌ ERRO ao inicializar cliente Baileys:', error);
       this.clientStatus = `Erro: ${(error as Error).message}`;
       
       // Tentar reconectar após delay
@@ -95,65 +96,64 @@ class WhatsAppIntegration {
   }
 
   // =====================================================================
-  // 📡 EVENTOS DO CLIENTE
+  // 📡 EVENTOS DO CLIENTE BAILEYS
   // =====================================================================
-  private setupEventListeners() {
-    if (!this.client) return;
+  private setupEventListeners(saveCreds: () => Promise<void>) {
+    if (!this.sock) return;
 
-    // QR Code gerado
-    this.client.on('qr', async (qr) => {
-      try {
-        console.log('📱 QR Code recebido...');
-        this.qrCodeDataUrl = await qrcode.toDataURL(qr);
-        this.clientStatus = 'Aguardando escaneamento do QR Code';
-        console.log('✅ QR Code gerado com sucesso');
-      } catch (error) {
-        console.error('❌ Erro ao gerar QR Code:', error);
+    // Atualização de conexão
+    this.sock.ev.on('connection.update', async (update: any) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      // QR Code gerado
+      if (qr) {
+        try {
+          console.log('📱 QR Code recebido do Baileys...');
+          this.qrCodeDataUrl = await qrcode.toDataURL(qr);
+          this.clientStatus = 'Aguardando escaneamento do QR Code';
+          console.log('✅ QR Code gerado com sucesso via Baileys');
+        } catch (error) {
+          console.error('❌ Erro ao gerar QR Code:', error);
+        }
+      }
+
+      // Status da conexão
+      if (connection === 'close') {
+        const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+        
+        console.warn('⚠️ Conexão fechada. Reconectar?', shouldReconnect);
+        this.clientStatus = 'Desconectado';
+        this.qrCodeDataUrl = '';
+
+        if (shouldReconnect && !this.isReconnecting) {
+          setTimeout(() => this.handleReconnect(), 5000);
+        }
+      } else if (connection === 'open') {
+        console.log('✅ Cliente Baileys WhatsApp está pronto e conectado!');
+        this.qrCodeDataUrl = '';
+        this.clientStatus = 'Conectado';
+        this.clientStartTime = Date.now();
+        this.reconnectAttempts = 0;
+        this.isReconnecting = false;
+        this.connectionCount++;
+        this.lastActivity = new Date();
+      } else if (connection === 'connecting') {
+        this.clientStatus = 'Conectando...';
+        console.log('🔄 Baileys conectando...');
       }
     });
 
-    // Cliente pronto
-    this.client.on('ready', () => {
-      console.log('✅ Cliente WhatsApp integrado está pronto e conectado!');
-      this.qrCodeDataUrl = '';
-      this.clientStatus = 'Conectado';
-      this.clientStartTime = Date.now();
-      this.reconnectAttempts = 0;
-      this.isReconnecting = false;
-      this.connectionCount++;
-      this.lastActivity = new Date();
-    });
+    // Salvar credenciais quando atualizadas
+    this.sock.ev.on('creds.update', saveCreds);
 
-    // Falha de autenticação
-    this.client.on('auth_failure', (msg) => {
-      console.error('❌ Falha de autenticação WhatsApp:', msg);
-      this.clientStatus = 'Falha de autenticação';
-      
-      // Limpar dados da sessão e tentar reconectar
-      setTimeout(() => this.handleReconnect(), 10000);
-    });
-
-    // Cliente desconectado
-    this.client.on('disconnected', (reason) => {
-      console.warn('⚠️ WhatsApp desconectado:', reason);
-      this.clientStatus = `Desconectado: ${reason}`;
-      this.qrCodeDataUrl = '';
-      
-      // Tentar reconectar automaticamente
-      if (!this.isReconnecting) {
-        setTimeout(() => this.handleReconnect(), 5000);
+    // Mensagens recebidas
+    this.sock.ev.on('messages.upsert', async (m: any) => {
+      const messages = m.messages;
+      for (const message of messages) {
+        if (!message.key.fromMe && message.message) {
+          await this.handleIncomingMessage(message);
+        }
       }
-    });
-
-    // Mensagem recebida
-    this.client.on('message', async (message) => {
-      await this.handleIncomingMessage(message);
-    });
-
-    // Logs de loading
-    this.client.on('loading_screen', (percent) => {
-      console.log(`📱 Carregando WhatsApp: ${percent}%`);
-      this.clientStatus = `Carregando: ${percent}%`;
     });
   }
 
@@ -177,10 +177,10 @@ class WhatsAppIntegration {
     this.clientStatus = `Reconectando (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`;
 
     try {
-      // Destruir cliente atual se existir
-      if (this.client) {
-        await this.client.destroy();
-        this.client = null;
+      // Destruir socket atual se existir
+      if (this.sock) {
+        this.sock.end();
+        this.sock = null;
       }
 
       // Aguardar um pouco antes de reconectar
@@ -203,18 +203,20 @@ class WhatsAppIntegration {
   // =====================================================================
   private async handleIncomingMessage(message: any) {
     try {
-      console.log(`[WHATSAPP] 📩 Nova mensagem de: ${message.from}`);
+      const from = message.key.remoteJid;
+      const messageContent = message.message?.conversation || 
+                           message.message?.extendedTextMessage?.text || '';
+      
+      console.log(`[BAILEYS] 📩 Nova mensagem de: ${from}`);
       this.lastActivity = new Date();
 
-      const sanitizedFrom = message.from.split('@')[0];
-      
       // Salvar conversa no banco de dados
       await this.saveConversation(message);
 
-      console.log(`[WHATSAPP] ✅ Mensagem de ${sanitizedFrom} processada com sucesso`);
+      console.log(`[BAILEYS] ✅ Mensagem de ${from} processada com sucesso`);
 
     } catch (error) {
-      console.error('[WHATSAPP] ❌ Erro ao processar mensagem:', error);
+      console.error('[BAILEYS] ❌ Erro ao processar mensagem:', error);
     }
   }
 
@@ -223,9 +225,13 @@ class WhatsAppIntegration {
   // =====================================================================
   private async saveConversation(message: any) {
     try {
-      const phone = message.from;
-      const sanitizedPhone = phone.split('@')[0];
-      const contactName = message._data.notifyName || `Usuário ${sanitizedPhone}`;
+      const phone = message.key.remoteJid;
+      const sanitizedPhone = phone?.split('@')[0] || 'unknown';
+      const contactName = message.pushName || `Usuário ${sanitizedPhone}`;
+      const messageContent = message.message?.conversation || 
+                           message.message?.extendedTextMessage?.text || '';
+
+      if (!phone) return;
 
       // Obter ou criar conversa
       const conversation = await storage.getOrCreateConversation(phone, contactName);
@@ -233,11 +239,11 @@ class WhatsAppIntegration {
       // Salvar mensagem
       await storage.createMessage({
         conversationId: conversation.id,
-        messageId: message.id.id,
-        type: message.hasMedia ? 'media' : 'text',
-        content: message.body,
+        messageId: message.key.id || '',
+        type: message.message?.imageMessage || message.message?.videoMessage ? 'media' : 'text',
+        content: messageContent,
         fromMe: false,
-        timestamp: new Date(message.timestamp * 1000)
+        timestamp: new Date()
       });
 
       console.log(`[DATABASE] ✅ Conversa e mensagem salvas - ID: ${conversation.id}`);
@@ -252,7 +258,7 @@ class WhatsAppIntegration {
   // =====================================================================
   public getStatus(): WhatsAppStatus {
     const uptime = Math.round((Date.now() - this.clientStartTime) / 1000);
-    const isReady = this.client?.info?.wid ? true : false;
+    const isReady = this.sock && this.clientStatus === 'Conectado';
 
     return {
       status: this.clientStatus,
@@ -270,27 +276,27 @@ class WhatsAppIntegration {
 
   public async sendMessage(phone: string, message: string): Promise<boolean> {
     try {
-      if (!this.client || this.clientStatus !== 'Conectado') {
+      if (!this.sock || this.clientStatus !== 'Conectado') {
         throw new Error('Cliente WhatsApp não está conectado');
       }
 
-      // Formatar número de telefone
-      const formattedPhone = phone.includes('@') ? phone : `${phone}@c.us`;
+      // Formatar número de telefone para Baileys
+      const formattedPhone = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`;
       
-      await this.client.sendMessage(formattedPhone, message);
+      await this.sock.sendMessage(formattedPhone, { text: message });
       this.lastActivity = new Date();
       
-      console.log(`[ENVIO] ✅ Mensagem enviada para ${phone}`);
+      console.log(`[BAILEYS ENVIO] ✅ Mensagem enviada para ${phone}`);
       return true;
 
     } catch (error) {
-      console.error('[ENVIO] ❌ Erro ao enviar mensagem:', error);
+      console.error('[BAILEYS ENVIO] ❌ Erro ao enviar mensagem:', error);
       return false;
     }
   }
 
   public async isReady(): Promise<boolean> {
-    return this.client?.info?.wid ? true : false;
+    return this.sock && this.clientStatus === 'Conectado';
   }
 }
 
