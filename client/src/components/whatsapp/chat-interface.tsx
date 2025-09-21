@@ -97,7 +97,7 @@ export function ChatInterface() {
 
   // Buscar mensagens da conversa selecionada com polling automático
   const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
-    queryKey: ['/api/whatsapp/messages', selectedConversation?.id],
+    queryKey: ['/api/whatsapp/conversations', selectedConversation?.id, 'messages'],
     enabled: !!selectedConversation?.id,
     refetchInterval: 2000, // Atualiza a cada 2 segundos
     refetchIntervalInBackground: true,
@@ -116,7 +116,7 @@ export function ChatInterface() {
       setNewMessage('');
       // Invalidar queries para recarregar dados
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/messages', selectedConversation?.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations', selectedConversation?.id, 'messages'] });
       toast({
         title: "Mensagem enviada",
         description: "Sua mensagem foi enviada com sucesso.",
@@ -169,7 +169,7 @@ export function ChatInterface() {
       }
       setShowNewContactForm(false);
       newContactForm.reset();
-      setSelectedConversation(result.conversation);
+      setSelectedConversation(result.conversation as Conversation);
       // Invalidar queries para recarregar dados
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations'] });
     },
