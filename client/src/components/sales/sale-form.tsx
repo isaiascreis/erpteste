@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -141,7 +142,11 @@ interface SaleFormProps {
 }
 
 export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
+  // Detect if we're in edit mode (has existing sale) or create mode
+  const isEditMode = Boolean(sale && sale.id);
+  
   const [step, setStep] = useState(1);
+  const [activeTab, setActiveTab] = useState("contratante");
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [passengers, setPassengers] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -904,6 +909,429 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     { id: 5, name: "Tarefas/Exigências", description: "Check-in, Cartinhas, Documentos" },
   ];
 
+  // Render functions for content sections
+  const renderContratanteContent = () => (
+    <>
+      <Card data-testid="card-client-selection">
+        <CardHeader>
+          <CardTitle>Contratante (pagante)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-foreground">Buscar Contratante</label>
+            <div className="relative mt-1">
+              <Input
+                type="text"
+                placeholder="Digite o nome do contratante..."
+                value={searchClient}
+                onChange={(e) => setSearchClient(e.target.value)}
+                className="pr-10"
+                data-testid="input-search-client"
+              />
+            </div>
+          </div>
+
+          {/* Client list */}
+          <div className="max-h-48 overflow-y-auto border rounded-lg p-2">
+            {clients
+              ?.filter(client => client.nome.toLowerCase().includes(searchClient.toLowerCase()))
+              .map((client: any) => (
+                <div
+                  key={client.id}
+                  className={`p-3 rounded cursor-pointer transition-colors ${
+                    selectedClient?.id === client.id ? 'bg-primary/10 border border-primary' : 'hover:bg-muted'
+                  }`}
+                  onClick={() => setSelectedClient(client)}
+                  data-testid={`client-option-${client.id}`}
+                >
+                  <div className="font-medium">{client.nome}</div>
+                  <div className="text-sm text-muted-foreground">{client.email || 'Sem email'}</div>
+                </div>
+              )) || []}
+          </div>
+
+          {selectedClient && (
+            <div className="bg-muted p-4 rounded-lg" data-testid="selected-client-info">
+              <h3 className="font-medium mb-2">Cliente Selecionado</h3>
+              <p><strong>Nome:</strong> {selectedClient.nome}</p>
+              {selectedClient.email && <p><strong>Email:</strong> {selectedClient.email}</p>}
+              {selectedClient.telefone && <p><strong>Telefone:</strong> {selectedClient.telefone}</p>}
+              {selectedClient.cpf && <p><strong>CPF:</strong> {selectedClient.cpf}</p>}
+            </div>
+          )}
+
+          <Button
+            onClick={() => setShowClientModal(true)}
+            variant="outline"
+            className="w-full"
+            data-testid="button-create-client"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Criar Novo Cliente
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-passengers">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Passageiros</CardTitle>
+            <Button onClick={() => setShowPassengerModal(true)} size="sm" data-testid="button-add-passenger">
+              <Plus className="w-4 h-4 mr-2" />
+              Adicionar Passageiro
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {passengers.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <User className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4" />
+              <p>Nenhum passageiro adicionado ainda.</p>
+              <p className="text-sm">Clique no botão acima para adicionar passageiros.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {passengers.map((passenger) => (
+                <div key={passenger.id} className="flex items-center justify-between p-3 bg-muted rounded-lg" data-testid={`passenger-item-${passenger.id}`}>
+                  <div>
+                    <div className="font-medium">{passenger.nome}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {passenger.funcao} {passenger.cpf ? `• CPF: ${passenger.cpf}` : ''}
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingItem(passenger);
+                        setShowPassengerModal(true);
+                      }}
+                      data-testid={`button-edit-passenger-${passenger.id}`}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setPassengers(passengers.filter(p => p.id !== passenger.id));
+                      }}
+                      data-testid={`button-delete-passenger-${passenger.id}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
+
+  const renderServicosContent = () => (
+    <Card data-testid="card-services">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Serviços</CardTitle>
+          <Button onClick={() => setShowServiceModal(true)} size="sm" data-testid="button-add-service">
+            <Plus className="w-4 h-4 mr-2" />
+            Adicionar Serviço
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {services.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Plane className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4" />
+            <p>Nenhum serviço adicionado ainda.</p>
+            <p className="text-sm">Clique no botão acima para adicionar serviços.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {services.map((service) => (
+              <div key={service.id} className="border rounded-lg p-4" data-testid={`service-item-${service.id}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    {service.tipo === 'aereo' && <Plane className="w-5 h-5 text-blue-500" />}
+                    {service.tipo === 'hotel' && <Bed className="w-5 h-5 text-green-500" />}
+                    {service.tipo === 'transfer' && <Car className="w-5 h-5 text-yellow-500" />}
+                    <span className="font-medium capitalize">{service.tipo}</span>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingItem(service);
+                        setShowServiceModal(true);
+                      }}
+                      data-testid={`button-edit-service-${service.id}`}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setServices(services.filter(s => s.id !== service.id));
+                      }}
+                      data-testid={`button-delete-service-${service.id}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p><strong>Descrição:</strong> {service.descricao}</p>
+                  {service.localizador && <p><strong>Localizador:</strong> {service.localizador}</p>}
+                  {service.fornecedorId && (
+                    <p><strong>Fornecedor:</strong> {suppliers?.find((s: any) => s.id === service.fornecedorId)?.nome || 'N/A'}</p>
+                  )}
+                  
+                  {/* Flight Details Display */}
+                  {service.tipo === 'aereo' && service.detalhes && (
+                    <div className="mt-3 p-3 bg-blue-50 rounded-md">
+                      <h4 className="font-medium text-blue-800 mb-2">Detalhes do Voo</h4>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        {service.detalhes.numeroVoo && <p><strong>Voo:</strong> {service.detalhes.numeroVoo}</p>}
+                        {service.detalhes.companhiaAerea && <p><strong>Cia Aérea:</strong> {service.detalhes.companhiaAerea}</p>}
+                        {service.detalhes.origem && <p><strong>Origem:</strong> {service.detalhes.origem}</p>}
+                        {service.detalhes.destino && <p><strong>Destino:</strong> {service.detalhes.destino}</p>}
+                        {service.detalhes.dataVoo && <p><strong>Data:</strong> {service.detalhes.dataVoo}</p>}
+                        {service.detalhes.horarioSaida && <p><strong>Saída:</strong> {service.detalhes.horarioSaida}</p>}
+                        {service.detalhes.horarioChegada && <p><strong>Chegada:</strong> {service.detalhes.horarioChegada}</p>}
+                        {service.detalhes.direcao && <p><strong>Direção:</strong> {service.detalhes.direcao}</p>}
+                        {service.detalhes.classe && <p><strong>Classe:</strong> {service.detalhes.classe}</p>}
+                      </div>
+                      {service.detalhes.observacoes && (
+                        <p className="mt-2"><strong>Obs:</strong> {service.detalhes.observacoes}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Hotel Details Display */}
+                  {service.tipo === 'hotel' && service.detalhes && (
+                    <div className="mt-3 p-3 bg-green-50 rounded-md">
+                      <h4 className="font-medium text-green-800 mb-2">Detalhes do Hotel</h4>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        {service.detalhes.nomeHotel && <p><strong>Hotel:</strong> {service.detalhes.nomeHotel}</p>}
+                        {service.detalhes.cidade && <p><strong>Cidade:</strong> {service.detalhes.cidade}</p>}
+                        {service.detalhes.endereco && <p><strong>Endereço:</strong> {service.detalhes.endereco}</p>}
+                        {service.detalhes.dataCheckin && <p><strong>Check-in:</strong> {service.detalhes.dataCheckin}</p>}
+                        {service.detalhes.dataCheckout && <p><strong>Check-out:</strong> {service.detalhes.dataCheckout}</p>}
+                        {service.detalhes.regimeAlimentar && <p><strong>Regime:</strong> {service.detalhes.regimeAlimentar}</p>}
+                        {service.detalhes.categoriaQuarto && <p><strong>Quarto:</strong> {service.detalhes.categoriaQuarto}</p>}
+                        {service.detalhes.numeroNoites && <p><strong>Noites:</strong> {service.detalhes.numeroNoites}</p>}
+                        {service.detalhes.numeroHospedes && <p><strong>Hóspedes:</strong> {service.detalhes.numeroHospedes}</p>}
+                      </div>
+                      {service.detalhes.observacoes && (
+                        <p className="mt-2"><strong>Obs:</strong> {service.detalhes.observacoes}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Service Pricing */}
+                <div className="mt-3 flex justify-between items-center text-sm">
+                  <span>Custo: <span className="font-medium">R$ {parseFloat(service.valorCusto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></span>
+                  <span>Venda: <span className="font-medium">R$ {parseFloat(service.valorVenda || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const renderVendedoresContent = () => (
+    <Card data-testid="card-sellers">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Vendedores</CardTitle>
+          <Button onClick={() => setShowSellerModal(true)} size="sm" data-testid="button-add-seller">
+            <Plus className="w-4 h-4 mr-2" />
+            Adicionar Vendedor
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {salesSellers.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <User className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4" />
+            <p>Nenhum vendedor adicionado ainda.</p>
+            <p className="text-sm">Clique no botão acima para adicionar vendedores.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {salesSellers.map((seller) => (
+              <div key={seller.id} className="flex items-center justify-between p-3 bg-muted rounded-lg" data-testid={`seller-item-${seller.id}`}>
+                <div>
+                  <div className="font-medium">{sellers?.find((s: any) => s.id === seller.vendedorId)?.nome || 'Vendedor não encontrado'}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {seller.percentualComissao}% de comissão • R$ {parseFloat(seller.valorComissao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingItem(seller);
+                      setShowSellerModal(true);
+                    }}
+                    data-testid={`button-edit-seller-${seller.id}`}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setSalesSellers(salesSellers.filter(s => s.id !== seller.id));
+                    }}
+                    data-testid={`button-delete-seller-${seller.id}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const renderPagamentosContent = () => (
+    <Card data-testid="card-payment-plans">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Plano de Pagamento</CardTitle>
+          <Button onClick={() => setShowPaymentModal(true)} size="sm" data-testid="button-add-payment">
+            <Plus className="w-4 h-4 mr-2" />
+            Adicionar Parcela
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {paymentPlans.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground" data-testid="empty-payment-plans">
+            <div className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4 flex items-center justify-center">
+              <FileText className="h-8 w-8" />
+            </div>
+            <p>Nenhuma parcela adicionada ainda.</p>
+            <p className="text-sm">Clique no botão acima para adicionar parcelas.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {paymentPlans.map((payment) => (
+              <div key={payment.id} className="flex items-center justify-between p-3 bg-muted rounded-lg" data-testid={`payment-item-${payment.id}`}>
+                <div>
+                  <div className="font-medium">Parcela {payment.numeroParcela}</div>
+                  <div className="text-sm text-muted-foreground">
+                    Vencimento: {payment.dataVencimento} • 
+                    R$ {parseFloat(payment.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} •
+                    {payment.metodoPagamentoAgencia ? ` Agência: ${paymentMethodsAgencia?.find((m: any) => m.id === payment.metodoPagamentoAgencia)?.nome}` : ''}
+                    {payment.metodoPagamentoFornecedor ? ` Fornecedor: ${paymentMethodsFornecedor?.find((m: any) => m.id === payment.metodoPagamentoFornecedor)?.nome}` : ''}
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingItem(payment);
+                      setShowPaymentModal(true);
+                    }}
+                    data-testid={`button-edit-payment-${payment.id}`}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setPaymentPlans(paymentPlans.filter(p => p.id !== payment.id));
+                    }}
+                    data-testid={`button-delete-payment-${payment.id}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const renderTarefasContent = () => (
+    <Card data-testid="card-requirements">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Tarefas/Exigências</CardTitle>
+          <Button onClick={() => setShowRequirementModal(true)} size="sm" data-testid="button-add-requirement">
+            <Plus className="w-4 h-4 mr-2" />
+            Adicionar Tarefa
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {requirements.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <FileText className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4" />
+            <p>Nenhuma tarefa/exigência adicionada ainda.</p>
+            <p className="text-sm">Clique no botão acima para adicionar tarefas.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {requirements.map((requirement) => (
+              <div key={requirement.id} className="flex items-center justify-between p-3 bg-muted rounded-lg" data-testid={`requirement-item-${requirement.id}`}>
+                <div>
+                  <div className="font-medium">{requirement.descricao}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {requirement.tipo} • {requirement.status} • 
+                    Prioridade: {requirement.prioridade}
+                    {requirement.dataVencimento ? ` • Vence: ${requirement.dataVencimento}` : ''}
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingItem(requirement);
+                      setShowRequirementModal(true);
+                    }}
+                    data-testid={`button-edit-requirement-${requirement.id}`}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setRequirements(requirements.filter(r => r.id !== requirement.id));
+                    }}
+                    data-testid={`button-delete-requirement-${requirement.id}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="p-8" data-testid="sale-form-container">
       <div className="max-w-6xl mx-auto">
@@ -928,38 +1356,76 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
           </div>
         </div>
 
-        {/* Progress Steps */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {steps.map((stepItem, index) => (
-                <div key={stepItem.id} className="flex items-center space-x-2">
-                  <div className={`flex items-center space-x-2 ${step === stepItem.id ? 'text-primary' : 'text-muted-foreground'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                      step === stepItem.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                    }`}>
-                      {stepItem.id}
+        {/* Progress Steps (only for create mode) or Tabs (for edit mode) */}
+        {!isEditMode ? (
+          <div className="mb-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                {steps.map((stepItem, index) => (
+                  <div key={stepItem.id} className="flex items-center space-x-2">
+                    <div className={`flex items-center space-x-2 ${step === stepItem.id ? 'text-primary' : 'text-muted-foreground'}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                        step === stepItem.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {stepItem.id}
+                      </div>
+                      <span className="text-sm font-medium">{stepItem.name}</span>
                     </div>
-                    <span className="text-sm font-medium">{stepItem.name}</span>
+                    {index < steps.length - 1 && (
+                      <div className="w-12 h-px bg-border"></div>
+                    )}
                   </div>
-                  {index < steps.length - 1 && (
-                    <div className="w-12 h-px bg-border"></div>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Form */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Step 1: Client Selection */}
-            {step === 1 && (
+            
+            {/* Edit Mode: Tabs Layout */}
+            {isEditMode ? (
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-5">
+                  <TabsTrigger value="contratante" data-testid="tab-contratante">Contratante</TabsTrigger>
+                  <TabsTrigger value="servicos" data-testid="tab-servicos">Serviços</TabsTrigger>
+                  <TabsTrigger value="vendedores" data-testid="tab-vendedores">Vendedores</TabsTrigger>
+                  <TabsTrigger value="pagamentos" data-testid="tab-pagamentos">Pagamentos</TabsTrigger>
+                  <TabsTrigger value="tarefas" data-testid="tab-tarefas">Tarefas</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="contratante" className="mt-6">
+                  {/* Contratante content */}
+                  {renderContratanteContent()}
+                </TabsContent>
+
+                <TabsContent value="servicos" className="mt-6">
+                  {/* Serviços content */}
+                  {renderServicosContent()}
+                </TabsContent>
+
+                <TabsContent value="vendedores" className="mt-6">
+                  {/* Vendedores content */}
+                  {renderVendedoresContent()}
+                </TabsContent>
+
+                <TabsContent value="pagamentos" className="mt-6">
+                  {/* Pagamentos content */}
+                  {renderPagamentosContent()}
+                </TabsContent>
+
+                <TabsContent value="tarefas" className="mt-6">
+                  {/* Tarefas content */}
+                  {renderTarefasContent()}
+                </TabsContent>
+              </Tabs>
+            ) : (
+              // Create Mode: Step-by-step Layout
               <>
-                <Card data-testid="card-client-selection">
-                  <CardHeader>
-                    <CardTitle>Contratante (pagante)</CardTitle>
+                {/* Step 1: Client Selection */}
+                {step === 1 && renderContratanteContent()}
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
