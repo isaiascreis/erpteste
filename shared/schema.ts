@@ -61,7 +61,7 @@ export const accountTypeEnum = pgEnum("account_type", ["pagar", "receber"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pendente", "parcial", "liquidado"]);
 export const serviceTypeEnum = pgEnum("service_type", ["aereo", "hotel", "transfer", "outros"]);
 export const accountCategoryTypeEnum = pgEnum("account_category_type", ["receita", "despesa", "outros"]);
-export const paymentMethodTypeEnum = pgEnum("payment_method_type", ["AGENCIA", "FORNECEDOR"]);
+export const paymentMethodTypeEnum = pgEnum("payment_method_type_enum", ["AGENCIA", "FORNECEDOR"]);
 export const passengerRoleEnum = pgEnum("passenger_role", ["passageiro", "contratante"]);
 
 // Clients
@@ -172,13 +172,32 @@ export const services = pgTable("services", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Service Passengers (valores individuais por passageiro)
+// Service Passengers (valores individuais por passageiro) - LEGACY TABLE - usar serviceClients
 export const servicePassengers = pgTable("service_passengers", {
   id: serial("id").primaryKey(),
   servicoId: integer("servico_id").references(() => services.id).notNull(),
   passageiroId: integer("passageiro_id").references(() => passengers.id).notNull(),
   valorVenda: decimal("valor_venda", { precision: 10, scale: 2 }).default("0.00"),
   valorCusto: decimal("valor_custo", { precision: 10, scale: 2 }).default("0.00"),
+});
+
+// NEW: Sale Clients (participantes da venda - contratante + passageiros)
+export const saleClients = pgTable("sale_clients", {
+  id: serial("id").primaryKey(),
+  vendaId: integer("venda_id").references(() => sales.id).notNull(),
+  clienteId: integer("cliente_id").references(() => clients.id).notNull(),
+  funcao: passengerRoleEnum("funcao").notNull(), // contratante ou passageiro
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// NEW: Service Clients (substituí servicePassengers - usa clienteId)
+export const serviceClients = pgTable("service_clients", {
+  id: serial("id").primaryKey(),
+  servicoId: integer("servico_id").references(() => services.id).notNull(),
+  clienteId: integer("cliente_id").references(() => clients.id).notNull(),
+  valorVenda: decimal("valor_venda", { precision: 10, scale: 2 }).default("0.00"),
+  valorCusto: decimal("valor_custo", { precision: 10, scale: 2 }).default("0.00"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Sale Sellers
@@ -242,7 +261,8 @@ export const paymentPlans = pgTable("payment_plans", {
   formaPagamentoId: integer("forma_pagamento_id").references(() => paymentMethods.id), // Referência à nova tabela
   condicaoPagamentoId: integer("condicao_pagamento_id").references(() => paymentConditions.id), // Condição específica
   quemRecebe: varchar("quem_recebe", { length: 50 }).notNull(), // AGENCIA ou FORNECEDOR
-  passageiroPaganteId: integer("passageiro_pagante_id").references(() => passengers.id), // Quem está pagando
+  passageiroPaganteId: integer("passageiro_pagante_id").references(() => passengers.id), // LEGACY - Quem está pagando
+  clientePaganteId: integer("cliente_pagante_id").references(() => clients.id), // NEW - Quem está pagando (usar este)
   status: paymentStatusEnum("status").default("pendente"),
   dataLiquidacao: timestamp("data_liquidacao"),
   valorPago: decimal("valor_pago", { precision: 10, scale: 2 }).default("0.00"), // Valor já pago
@@ -274,7 +294,6 @@ export const saleRequirements = pgTable("sale_requirements", {
 export const saleCommissions = pgTable("sale_commissions", {
   id: serial("id").primaryKey(),
   vendaId: integer("venda_id").references(() => sales.id).notNull(),
-  vendedorId: integer("vendedor_id").references(() => sellers.id),
   userId: varchar("user_id").references(() => users.id), // Para vendedores do sistema
   tipo: varchar("tipo", { length: 50 }).notNull(), // vendedor, fornecedor
   percentual: decimal("percentual", { precision: 5, scale: 2 }).notNull(),
@@ -541,10 +560,6 @@ export const saleCommissionsRelations = relations(saleCommissions, ({ one }) => 
     fields: [saleCommissions.vendaId],
     references: [sales.id],
   }),
-  seller: one(sellers, {
-    fields: [saleCommissions.vendedorId],
-    references: [sellers.id],
-  }),
   user: one(users, {
     fields: [saleCommissions.userId],
     references: [users.id],
@@ -566,6 +581,8 @@ export const insertSaleSchema = createInsertSchema(sales).omit({ id: true, creat
 export const insertPassengerSchema = createInsertSchema(passengers).omit({ id: true, createdAt: true });
 export const insertServiceSchema = createInsertSchema(services).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertServicePassengerSchema = createInsertSchema(servicePassengers).omit({ id: true });
+export const insertSaleClientSchema = createInsertSchema(saleClients).omit({ id: true, createdAt: true });
+export const insertServiceClientSchema = createInsertSchema(serviceClients).omit({ id: true, createdAt: true });
 export const insertSaleSellerSchema = createInsertSchema(saleSellers).omit({ id: true });
 export const insertBankAccountSchema = createInsertSchema(bankAccounts).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPaymentMethodSchema = createInsertSchema(paymentMethods).omit({ id: true, createdAt: true, updatedAt: true });
@@ -616,6 +633,10 @@ export type Service = typeof services.$inferSelect;
 export type InsertService = z.infer<typeof insertServiceSchema>;
 export type ServicePassenger = typeof servicePassengers.$inferSelect;
 export type InsertServicePassenger = z.infer<typeof insertServicePassengerSchema>;
+export type SaleClient = typeof saleClients.$inferSelect;
+export type InsertSaleClient = z.infer<typeof insertSaleClientSchema>;
+export type ServiceClient = typeof serviceClients.$inferSelect;
+export type InsertServiceClient = z.infer<typeof insertServiceClientSchema>;
 export type SaleSeller = typeof saleSellers.$inferSelect;
 export type InsertSaleSeller = z.infer<typeof insertSaleSellerSchema>;
 export type BankAccount = typeof bankAccounts.$inferSelect;
