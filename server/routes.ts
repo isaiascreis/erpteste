@@ -427,11 +427,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       contractHtml = contractHtml.replace(/\{\{emailCliente\}\}/g, sale.client?.email || 'Não informado');
       contractHtml = contractHtml.replace(/\{\{telefoneCliente\}\}/g, sale.client?.telefone || 'Não informado');
 
-      // Return HTML content (for now, we'll send HTML - in a real implementation, you'd convert to PDF)
-      // TODO: Implement actual PDF generation using @react-pdf/renderer or puppeteer
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Content-Disposition', `inline; filename="contrato-${sale.referencia || sale.id}.html"`);
-      res.send(contractHtml);
+      // Generate PDF using Puppeteer
+      console.log("Starting PDF generation with Puppeteer...");
+      const puppeteer = require('puppeteer');
+      
+      try {
+        console.log("Launching browser...");
+        const browser = await puppeteer.launch({
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        
+        console.log("Creating new page...");
+        const page = await browser.newPage();
+        console.log("Setting HTML content...");
+        await page.setContent(contractHtml, { 
+          waitUntil: 'networkidle0',
+          timeout: 30000
+        });
+        
+        console.log("Generating PDF...");
+        const pdfBuffer = await page.pdf({
+          format: 'A4',
+          printBackground: true,
+          margin: {
+            top: '20px',
+            right: '20px',
+            bottom: '20px',
+            left: '20px'
+          }
+        });
+        
+        console.log(`PDF generated successfully! Size: ${pdfBuffer.length} bytes`);
+        await browser.close();
+        
+        // Return PDF with proper headers
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="contrato-venda-${sale.referencia || sale.id}.pdf"`);
+        res.send(pdfBuffer);
+        
+      } catch (pdfError) {
+        console.error("Error generating PDF:", pdfError);
+        // Fallback to HTML if PDF generation fails
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Content-Disposition', `inline; filename="contrato-${sale.referencia || sale.id}.html"`);
+        res.send(contractHtml);
+      }
 
     } catch (error) {
       console.error("Error generating contract:", error);
