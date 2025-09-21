@@ -120,13 +120,40 @@ class WhatsAppIntegration {
       // Status da conexão
       if (connection === 'close') {
         const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+        const errorMessage = lastDisconnect?.error?.message || '';
+        
+        // Detectar conflito de sessão (verifica tanto erro message quanto trace)
+        const lastError = lastDisconnect?.error;
+        const isConflict = errorMessage.includes('conflict') || 
+                          errorMessage.includes('replaced') || 
+                          lastError?.toString().includes('conflict') ||
+                          JSON.stringify(lastError).includes('conflict');
+        
+        if (isConflict) {
+          console.warn('⚠️ CONFLITO DE SESSÃO detectado! Outra instância WhatsApp está ativa.');
+          this.clientStatus = 'CONFLITO: Feche WhatsApp Web/Mobile em outros dispositivos';
+          this.qrCodeDataUrl = '';
+          
+          // Para as tentativas de reconexão após 2 conflitos
+          if (this.reconnectAttempts >= 2) {
+            this.isReconnecting = false;
+            this.reconnectAttempts = 0;
+            this.clientStatus = 'Conflito persistente - Feche outras sessões WhatsApp e recarregue a página';
+            console.error('🔴 PARANDO reconexões devido a conflitos persistentes');
+            return;
+          }
+        }
         
         console.warn('⚠️ Conexão fechada. Reconectar?', shouldReconnect);
-        this.clientStatus = 'Desconectado';
+        if (!errorMessage.includes('conflict')) {
+          this.clientStatus = 'Desconectado';
+        }
         this.qrCodeDataUrl = '';
 
         if (shouldReconnect && !this.isReconnecting) {
-          setTimeout(() => this.handleReconnect(), 5000);
+          // Delay maior para conflitos
+          const delay = errorMessage.includes('conflict') ? 30000 : 5000;
+          setTimeout(() => this.handleReconnect(), delay);
         }
       } else if (connection === 'open') {
         console.log('✅ Cliente Baileys WhatsApp está pronto e conectado!');
@@ -158,7 +185,7 @@ class WhatsAppIntegration {
   }
 
   // =====================================================================
-  // 🔄 RECONEXÃO AUTOMÁTICA
+  // 🔄 RECONEXÃO AUTOMÁTICA COM TRATAMENTO DE CONFLITOS
   // =====================================================================
   private async handleReconnect() {
     if (this.isReconnecting) return;
@@ -168,8 +195,9 @@ class WhatsAppIntegration {
 
     if (this.reconnectAttempts > this.maxReconnectAttempts) {
       console.error('💥 Máximo de tentativas de reconexão atingido');
-      this.clientStatus = 'Falha na reconexão - Intervenção manual necessária';
+      this.clientStatus = 'Conflito de sessão - Feche outras conexões WhatsApp e escaneie novamente';
       this.isReconnecting = false;
+      this.qrCodeDataUrl = ''; // Limpar QR code para forçar nova autenticação
       return;
     }
 
@@ -183,8 +211,11 @@ class WhatsAppIntegration {
         this.sock = null;
       }
 
-      // Aguardar um pouco antes de reconectar
-      await new Promise(resolve => setTimeout(resolve, 5000 * this.reconnectAttempts));
+      // Delay exponencial mais agressivo para conflitos de sessão
+      const delay = Math.min(30000, 10000 * Math.pow(2, this.reconnectAttempts - 1));
+      console.log(`⏱️ Aguardando ${delay/1000}s antes de reconectar...`);
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
 
       // Reinicializar cliente
       await this.initializeClient();
@@ -193,8 +224,8 @@ class WhatsAppIntegration {
       console.error('❌ Erro na reconexão:', error);
       this.clientStatus = `Erro na reconexão: ${(error as Error).message}`;
       
-      // Tentar novamente após delay maior
-      setTimeout(() => this.handleReconnect(), 15000 * this.reconnectAttempts);
+      // Tentar novamente após delay ainda maior
+      setTimeout(() => this.handleReconnect(), 30000 * this.reconnectAttempts);
     }
   }
 
@@ -297,6 +328,37 @@ class WhatsAppIntegration {
 
   public async isReady(): Promise<boolean> {
     return this.sock && this.clientStatus === 'Conectado';
+  }
+
+  // Função para limpar sessão em caso de conflitos persistentes
+  public async clearSession(): Promise<void> {
+    try {
+      console.log('🧹 Limpando sessão WhatsApp devido a conflitos...');
+      
+      // Terminar socket atual
+      if (this.sock) {
+        this.sock.end();
+        this.sock = null;
+      }
+
+      // Limpar estados
+      this.qrCodeDataUrl = '';
+      this.clientStatus = 'Reiniciando...';
+      this.isReconnecting = false;
+      this.reconnectAttempts = 0;
+
+      // Aguardar 5 segundos antes de reinicializar
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Reinicializar cliente
+      await this.initializeClient();
+      
+      console.log('✅ Sessão WhatsApp reinicializada');
+      
+    } catch (error) {
+      console.error('❌ Erro ao limpar sessão:', error);
+      this.clientStatus = 'Erro ao reinicializar - Recarregue a página';
+    }
   }
 }
 
