@@ -105,6 +105,7 @@ export const sales = pgTable("sales", {
   id: serial("id").primaryKey(),
   referencia: varchar("referencia", { length: 50 }).notNull().unique(),
   clienteId: integer("cliente_id").references(() => clients.id).notNull(),
+  fornecedorId: integer("fornecedor_id").references(() => suppliers.id),
   status: saleStatusEnum("status").default("orcamento"),
   valorTotal: decimal("valor_total", { precision: 10, scale: 2 }).default("0.00"),
   custoTotal: decimal("custo_total", { precision: 10, scale: 2 }).default("0.00"),

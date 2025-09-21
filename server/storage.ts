@@ -1559,31 +1559,245 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPaymentPlan(paymentPlan: InsertPaymentPlan): Promise<PaymentPlan> {
-    const [created] = await db
-      .insert(paymentPlans)
-      .values(paymentPlan)
-      .returning();
-    
-    return created;
+    return await db.transaction(async (tx) => {
+      // Create the payment plan
+      const [created] = await tx
+        .insert(paymentPlans)
+        .values(paymentPlan)
+        .returning();
+
+      // Get sale details for financial account creation
+      const [sale] = await tx
+        .select({
+          id: sales.id,
+          clienteId: sales.clienteId,
+          fornecedorId: sales.fornecedorId,
+        })
+        .from(sales)
+        .where(eq(sales.id, paymentPlan.vendaId));
+
+      if (!sale) {
+        throw new Error("Venda não encontrada");
+      }
+
+      // Create corresponding financial account based on quemRecebe
+      if (paymentPlan.quemRecebe === 'FORNECEDOR' && sale.fornecedorId) {
+        // Create accounts payable entry
+        await tx
+          .insert(financialAccounts)
+          .values({
+            vendaId: paymentPlan.vendaId,
+            fornecedorId: sale.fornecedorId,
+            tipo: 'pagar',
+            descricao: `Plano de pagamento: ${paymentPlan.descricao}`,
+            valorTotal: paymentPlan.valor,
+            valorAberto: paymentPlan.valor,
+            dataVencimento: paymentPlan.dataVencimento,
+            status: 'pendente',
+          });
+      } else if (paymentPlan.quemRecebe === 'AGENCIA') {
+        // Create accounts receivable entry
+        await tx
+          .insert(financialAccounts)
+          .values({
+            vendaId: paymentPlan.vendaId,
+            clienteId: sale.clienteId,
+            tipo: 'receber',
+            descricao: `Plano de pagamento: ${paymentPlan.descricao}`,
+            valorTotal: paymentPlan.valor,
+            valorAberto: paymentPlan.valor,
+            dataVencimento: paymentPlan.dataVencimento,
+            status: 'pendente',
+          });
+      }
+
+      return created;
+    });
   }
 
   async deletePaymentPlan(id: number): Promise<void> {
-    await db
-      .delete(paymentPlans)
-      .where(eq(paymentPlans.id, id));
+    return await db.transaction(async (tx) => {
+      // Get payment plan details before deletion
+      const [paymentPlan] = await tx
+        .select({
+          id: paymentPlans.id,
+          vendaId: paymentPlans.vendaId,
+          descricao: paymentPlans.descricao,
+          quemRecebe: paymentPlans.quemRecebe,
+        })
+        .from(paymentPlans)
+        .where(eq(paymentPlans.id, id));
+
+      if (!paymentPlan) {
+        throw new Error("Plano de pagamento não encontrado");
+      }
+
+      // Delete corresponding financial accounts created by this payment plan
+      await tx
+        .delete(financialAccounts)
+        .where(
+          and(
+            eq(financialAccounts.vendaId, paymentPlan.vendaId),
+            eq(financialAccounts.descricao, `Plano de pagamento: ${paymentPlan.descricao}`)
+          )
+        );
+
+      // Delete the payment plan
+      await tx
+        .delete(paymentPlans)
+        .where(eq(paymentPlans.id, id));
+    });
   }
 
   async updatePaymentPlan(id: number, data: Partial<InsertPaymentPlan>): Promise<PaymentPlan> {
-    const [updated] = await db
-      .update(paymentPlans)
-      .set({
+    return await db.transaction(async (tx) => {
+      // Get current payment plan details before update
+      const [currentPlan] = await tx
+        .select({
+          id: paymentPlans.id,
+          vendaId: paymentPlans.vendaId,
+          descricao: paymentPlans.descricao,
+          valor: paymentPlans.valor,
+          dataVencimento: paymentPlans.dataVencimento,
+          quemRecebe: paymentPlans.quemRecebe,
+        })
+        .from(paymentPlans)
+        .where(eq(paymentPlans.id, id));
+
+      if (!currentPlan) {
+        throw new Error("Plano de pagamento não encontrado");
+      }
+
+      // Get sale details for financial account updates
+      const [sale] = await tx
+        .select({
+          id: sales.id,
+          clienteId: sales.clienteId,
+          fornecedorId: sales.fornecedorId,
+        })
+        .from(sales)
+        .where(eq(sales.id, currentPlan.vendaId));
+
+      if (!sale) {
+        throw new Error("Venda não encontrada");
+      }
+
+      // Prepare data with date conversion
+      const updateData = {
         ...data,
         updatedAt: new Date(),
-      })
-      .where(eq(paymentPlans.id, id))
-      .returning();
-    
-    return updated;
+      };
+      
+      // Convert dataVencimento to Date if provided as string
+      if (data.dataVencimento && typeof data.dataVencimento === 'string') {
+        updateData.dataVencimento = new Date(data.dataVencimento);
+      }
+
+      // Update the payment plan
+      const [updated] = await tx
+        .update(paymentPlans)
+        .set(updateData)
+        .where(eq(paymentPlans.id, id))
+        .returning();
+
+      // Handle financial account synchronization
+      const newQuemRecebe = data.quemRecebe || currentPlan.quemRecebe;
+      const newDescricao = data.descricao || currentPlan.descricao;
+      const newValor = data.valor || currentPlan.valor;
+      const newDataVencimento = data.dataVencimento ? new Date(data.dataVencimento) : currentPlan.dataVencimento;
+
+      // Find existing financial account
+      const [existingFinancialAccount] = await tx
+        .select()
+        .from(financialAccounts)
+        .where(
+          and(
+            eq(financialAccounts.vendaId, currentPlan.vendaId),
+            eq(financialAccounts.descricao, `Plano de pagamento: ${currentPlan.descricao}`)
+          )
+        );
+
+      if (existingFinancialAccount) {
+        // Check if quemRecebe changed (requires recreating the financial account)
+        if (data.quemRecebe && data.quemRecebe !== currentPlan.quemRecebe) {
+          // Delete old financial account
+          await tx
+            .delete(financialAccounts)
+            .where(eq(financialAccounts.id, existingFinancialAccount.id));
+
+          // Create new financial account with new type
+          if (newQuemRecebe === 'FORNECEDOR' && sale.fornecedorId) {
+            await tx
+              .insert(financialAccounts)
+              .values({
+                vendaId: currentPlan.vendaId,
+                fornecedorId: sale.fornecedorId,
+                tipo: 'pagar',
+                descricao: `Plano de pagamento: ${newDescricao}`,
+                valorTotal: newValor,
+                valorAberto: newValor,
+                dataVencimento: newDataVencimento,
+                status: 'pendente',
+              });
+          } else if (newQuemRecebe === 'AGENCIA') {
+            await tx
+              .insert(financialAccounts)
+              .values({
+                vendaId: currentPlan.vendaId,
+                clienteId: sale.clienteId,
+                tipo: 'receber',
+                descricao: `Plano de pagamento: ${newDescricao}`,
+                valorTotal: newValor,
+                valorAberto: newValor,
+                dataVencimento: newDataVencimento,
+                status: 'pendente',
+              });
+          }
+        } else {
+          // Update existing financial account (same quemRecebe)
+          await tx
+            .update(financialAccounts)
+            .set({
+              descricao: `Plano de pagamento: ${newDescricao}`,
+              valorTotal: newValor,
+              valorAberto: newValor,
+              dataVencimento: newDataVencimento,
+              updatedAt: new Date(),
+            })
+            .where(eq(financialAccounts.id, existingFinancialAccount.id));
+        }
+      } else if (newQuemRecebe === 'FORNECEDOR' && sale.fornecedorId) {
+        // No existing financial account found, create new one for FORNECEDOR
+        await tx
+          .insert(financialAccounts)
+          .values({
+            vendaId: currentPlan.vendaId,
+            fornecedorId: sale.fornecedorId,
+            tipo: 'pagar',
+            descricao: `Plano de pagamento: ${newDescricao}`,
+            valorTotal: newValor,
+            valorAberto: newValor,
+            dataVencimento: newDataVencimento,
+            status: 'pendente',
+          });
+      } else if (newQuemRecebe === 'AGENCIA') {
+        // No existing financial account found, create new one for AGENCIA
+        await tx
+          .insert(financialAccounts)
+          .values({
+            vendaId: currentPlan.vendaId,
+            clienteId: sale.clienteId,
+            tipo: 'receber',
+            descricao: `Plano de pagamento: ${newDescricao}`,
+            valorTotal: newValor,
+            valorAberto: newValor,
+            dataVencimento: newDataVencimento,
+            status: 'pendente',
+          });
+      }
+
+      return updated;
+    });
   }
 
   async liquidatePaymentPlan(id: number, liquidationData: { dataLiquidacao: Date; observacoes?: string }): Promise<{
@@ -1635,7 +1849,7 @@ export class DatabaseStorage implements IStorage {
       let commission: SaleCommission | undefined;
 
       // If payment to supplier, create accounts payable entry
-      if (paymentPlan.tipo === 'fornecedor' && paymentPlan.sale?.fornecedorId) {
+      if (paymentPlan.quemRecebe === 'FORNECEDOR' && paymentPlan.sale?.fornecedorId) {
         const [created] = await tx
           .insert(financialAccounts)
           .values({
@@ -1670,7 +1884,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       // If payment from agency, create accounts receivable entry  
-      if (paymentPlan.tipo === 'agencia' && paymentPlan.sale?.clienteId) {
+      if (paymentPlan.quemRecebe === 'AGENCIA' && paymentPlan.sale?.clienteId) {
         const [created] = await tx
           .insert(financialAccounts)
           .values({
