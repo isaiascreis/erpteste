@@ -75,13 +75,17 @@ class WhatsAppIntegration {
       // Configurar autenticação multi-file
       const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
 
-      // Criar socket Baileys
+      // Criar socket Baileys com configurações otimizadas para Replit
       this.sock = makeWASocket({
         auth: state,
         printQRInTerminal: false,
-        browser: Browsers.ubuntu('Chrome'),
-        generateHighQualityLinkPreview: true,
-        markOnlineOnConnect: true
+        browser: ['Ubuntu', 'Chrome', '20.0.04'], // Configuração específica para ambientes containerizados
+        generateHighQualityLinkPreview: false, // Desabilitar para melhor performance
+        markOnlineOnConnect: false, // Evitar conflitos em ambientes compartilhados
+        syncFullHistory: false, // Melhor performance em containers
+        defaultQueryTimeoutMs: 60000, // Timeout maior para ambientes instáveis
+        keepAliveIntervalMs: 30000, // Keep alive para conexões longas
+        connectTimeoutMs: 60000 // Timeout de conexão maior
       });
 
       this.setupEventListeners(saveCreds);
