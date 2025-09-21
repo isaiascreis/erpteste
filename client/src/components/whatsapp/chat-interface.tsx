@@ -123,10 +123,13 @@ export function ChatInterface() {
     refetchInterval: 3000,
   });
 
-  // Buscar usuários para atribuição (desabilitado por enquanto)
+  // Buscar usuários para atribuição (apenas se autenticado)
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['/api/users'],
-    enabled: false, // Desabilitar por enquanto pois retorna 401
+    enabled: false, // Desabilitado temporariamente até resolver autenticação
+    onError: (error: any) => {
+      console.warn("Não foi possível carregar usuários para atribuição:", error.message);
+    }
   });
 
   // Buscar mensagens da conversa selecionada
@@ -145,7 +148,7 @@ export function ChatInterface() {
   // Mutation para enviar mensagem
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { phone: string; message: string }) => {
-      return apiRequest('/api/whatsapp/send', 'POST', data);
+      return apiRequest('POST', '/api/whatsapp/send', data);
     },
     onSuccess: () => {
       setNewMessage("");
@@ -171,13 +174,13 @@ export function ChatInterface() {
   const createConversationMutation = useMutation({
     mutationFn: async (data: NewContactFormData) => {
       // Primeiro criar a conversa
-      const conversation = await apiRequest('/api/whatsapp/conversations', 'POST', {
+      const conversation = await apiRequest('POST', '/api/whatsapp/conversations', {
         phone: data.phone,
         name: data.name
       });
       
       // Depois enviar a mensagem inicial
-      await apiRequest('/api/whatsapp/send', 'POST', {
+      await apiRequest('POST', '/api/whatsapp/send', {
         phone: data.phone,
         message: data.message
       });
@@ -306,8 +309,21 @@ export function ChatInterface() {
 
   console.log("WhatsApp server status:", whatsappStatus?.status);
 
+  // Verificar se o WhatsApp está conectado
+  const isWhatsAppConnected = whatsappStatus?.status === 'Conectado';
+  const whatsappStatusText = whatsappStatus?.status || 'Verificando...';
+
   return (
     <div className="h-screen flex bg-background">
+      {/* Banner de Status quando Desconectado */}
+      {!isWhatsAppConnected && whatsappStatusText !== 'Verificando...' && (
+        <div className="fixed top-0 left-0 right-0 bg-yellow-100 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800 z-50">
+          <div className="flex items-center justify-center space-x-2">
+            <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+            <span>WhatsApp está {whatsappStatusText}. As mensagens não podem ser enviadas no momento.</span>
+          </div>
+        </div>
+      )}
       {/* Sidebar Esquerda - Lista de Conversas */}
       <div className="w-80 border-r border-border flex flex-col bg-card">
         {/* Header da Sidebar */}
@@ -397,7 +413,7 @@ export function ChatInterface() {
                         </Button>
                         <Button
                           type="submit"
-                          disabled={createConversationMutation.isPending}
+                          disabled={createConversationMutation.isPending || !isWhatsAppConnected}
                           data-testid="button-create-conversation"
                         >
                           {createConversationMutation.isPending ? (
@@ -660,19 +676,19 @@ export function ChatInterface() {
                 <div className="flex-1 relative">
                   <Textarea
                     ref={textareaRef}
-                    placeholder="Digite sua mensagem..."
+                    placeholder={isWhatsAppConnected ? "Digite sua mensagem..." : "WhatsApp desconectado - não é possível enviar mensagens"}
                     value={newMessage}
                     onChange={handleTextareaChange}
                     onKeyPress={handleKeyPress}
                     className="resize-none min-h-[40px] max-h-[120px] pr-12"
                     data-testid="input-message"
-                    disabled={sendMessageMutation.isPending}
+                    disabled={sendMessageMutation.isPending || !isWhatsAppConnected}
                   />
                   <Button
                     onClick={handleSendMessage}
-                    disabled={!newMessage.trim() || sendMessageMutation.isPending}
+                    disabled={!newMessage.trim() || sendMessageMutation.isPending || !isWhatsAppConnected}
                     size="sm"
-                    className="absolute bottom-2 right-2 bg-blue-500 hover:bg-blue-600 text-white rounded-full w-8 h-8 p-0"
+                    className="absolute bottom-2 right-2 bg-blue-500 hover:bg-blue-600 text-white rounded-full w-8 h-8 p-0 disabled:bg-gray-400"
                     data-testid="button-send"
                   >
                     {sendMessageMutation.isPending ? (
