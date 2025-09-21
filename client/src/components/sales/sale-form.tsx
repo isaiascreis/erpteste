@@ -1562,7 +1562,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
       {/* Passenger Modal - With tabs for direct passenger or client search */}
       <Dialog open={showPassengerModal} onOpenChange={setShowPassengerModal}>
-        <DialogContent className="max-w-2xl" data-testid="dialog-passenger">}
+        <DialogContent className="max-w-2xl" data-testid="dialog-passenger">
           <div className="lg:col-span-2 space-y-6">
             
             {/* Edit Mode: Tabs Layout */}
@@ -1755,53 +1755,23 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
       </div>
 
       {/* Passenger Modal - With tabs for direct passenger or client search */}
-                              service.tipo === 'aereo' ? 'bg-blue-100 dark:bg-blue-900' :
-                              service.tipo === 'hotel' ? 'bg-green-100 dark:bg-green-900' :
-                              service.tipo === 'transfer' ? 'bg-purple-100 dark:bg-purple-900' :
-                              'bg-gray-100 dark:bg-gray-900'
-                            }`}>
-                              {service.tipo === 'aereo' && <Plane className="text-blue-600 dark:text-blue-400 w-4 h-4" />}
-                              {service.tipo === 'hotel' && <Bed className="text-green-600 dark:text-green-400 w-4 h-4" />}
-                              {service.tipo === 'transfer' && <Car className="text-purple-600 dark:text-purple-400 w-4 h-4" />}
-                            </div>
-                            <div>
-                              <h4 className="font-semibold text-foreground">
-                                {service.tipo.charAt(0).toUpperCase() + service.tipo.slice(1)}
-                              </h4>
-                              <p className="text-sm text-muted-foreground">{service.descricao}</p>
-                              {service.localizador && (
-                                <p className="text-sm text-muted-foreground">
-                                  Localizador: {service.localizador}
-                                </p>
-                              )}
-                              {service.tipo === 'aereo' && service.detalhes && (
-                                <div className="text-sm text-muted-foreground space-y-1">
-                                  {service.detalhes.numeroVoo && (
-                                    <p>✈️ Voo: {service.detalhes.numeroVoo}</p>
-                                  )}
-                                  {service.detalhes.companhiaAerea && (
-                                    <p>🏢 Cia: {service.detalhes.companhiaAerea}</p>
-                                  )}
-                                  {(service.detalhes.origem || service.detalhes.destino) && (
-                                    <p>🛫 {service.detalhes.origem} → {service.detalhes.destino}</p>
-                                  )}
-                                  {service.detalhes.dataVoo && (
-                                    <p>📅 {new Date(service.detalhes.dataVoo).toLocaleDateString('pt-BR')}</p>
-                                  )}
-                                  {service.detalhes.direcao && (
-                                    <p>🔄 {service.detalhes.direcao.charAt(0).toUpperCase() + service.detalhes.direcao.slice(1)}</p>
-                                  )}
-                                </div>
-                              )}
-                              {service.tipo === 'hotel' && service.detalhes && (
-                                <div className="text-sm text-muted-foreground space-y-1">
-                                  {service.detalhes.nomeHotel && (
-                                    <p>🏨 Hotel: {service.detalhes.nomeHotel}</p>
-                                  )}
-                                  {service.detalhes.cidade && (
-                                    <p>📍 Cidade: {service.detalhes.cidade}</p>
-                                  )}
-                                  {(service.detalhes.dataCheckIn || service.detalhes.dataCheckOut) && (
+      <Dialog open={showPassengerModal} onOpenChange={setShowPassengerModal}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-passenger">
+          <DialogHeader>
+            <DialogTitle>
+              {editingItem ? "Editar Passageiro" : "Adicionar Passageiro"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>Modal content will be implemented here</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Other modals will be implemented here */}
+    </div>
+  );
+}
                                     <p>📅 Check-in: {service.detalhes.dataCheckIn && new Date(service.detalhes.dataCheckIn).toLocaleDateString('pt-BR')} → Check-out: {service.detalhes.dataCheckOut && new Date(service.detalhes.dataCheckOut).toLocaleDateString('pt-BR')}</p>
                                   )}
                                   {service.detalhes.regimeAlimentacao && (
