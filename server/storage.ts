@@ -2028,50 +2028,54 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  // Service Passengers operations - Valores individuais por passageiro em cada serviço
-  async getServicePassengers(serviceId: number): Promise<ServicePassenger[]> {
-    return await db
-      .select({
-        id: servicePassengers.id,
-        servicoId: servicePassengers.servicoId,
-        passageiroId: servicePassengers.passageiroId,
-        valorVenda: servicePassengers.valorVenda,
-        valorCusto: servicePassengers.valorCusto,
-      })
-      .from(servicePassengers)
-      .where(eq(servicePassengers.servicoId, serviceId));
-  }
+  // DEPRECATED: Service Passengers operations - Use serviceClients instead
+  // async getServicePassengers(serviceId: number): Promise<ServicePassenger[]> {
+  //   return await db
+  //     .select({
+  //       id: servicePassengers.id,
+  //       servicoId: servicePassengers.servicoId,
+  //       passageiroId: servicePassengers.passageiroId,
+  //       valorVenda: servicePassengers.valorVenda,
+  //       valorCusto: servicePassengers.valorCusto,
+  //     })
+  //     .from(servicePassengers)
+  //     .where(eq(servicePassengers.servicoId, serviceId));
+  // }
 
-  async createServicePassenger(data: InsertServicePassenger): Promise<ServicePassenger> {
-    const [created] = await db
-      .insert(servicePassengers)
-      .values(data)
-      .returning();
+  // DEPRECATED: Use upsertServiceClient instead
+  // async createServicePassenger(data: InsertServicePassenger): Promise<ServicePassenger> {
+  //   const [created] = await db
+  //     .insert(servicePassengers)
+  //     .values(data)
+  //     .returning();
+  //
+  //   return created;
+  // }
 
-    return created;
-  }
+  // DEPRECATED: Use upsertServiceClient instead
+  // async updateServicePassenger(id: number, data: Partial<InsertServicePassenger>): Promise<ServicePassenger> {
+  //   const [updated] = await db
+  //     .update(servicePassengers)
+  //     .set(data)
+  //     .where(eq(servicePassengers.id, id))
+  //     .returning();
+  //
+  //   return updated;
+  // }
 
-  async updateServicePassenger(id: number, data: Partial<InsertServicePassenger>): Promise<ServicePassenger> {
-    const [updated] = await db
-      .update(servicePassengers)
-      .set(data)
-      .where(eq(servicePassengers.id, id))
-      .returning();
+  // DEPRECATED: Use removeServiceClient instead
+  // async deleteServicePassenger(id: number): Promise<void> {
+  //   await db
+  //     .delete(servicePassengers)
+  //     .where(eq(servicePassengers.id, id));
+  // }
 
-    return updated;
-  }
-
-  async deleteServicePassenger(id: number): Promise<void> {
-    await db
-      .delete(servicePassengers)
-      .where(eq(servicePassengers.id, id));
-  }
-
-  async deleteServicePassengersByService(serviceId: number): Promise<void> {
-    await db
-      .delete(servicePassengers)
-      .where(eq(servicePassengers.servicoId, serviceId));
-  }
+  // DEPRECATED: Use serviceClients operations instead
+  // async deleteServicePassengersByService(serviceId: number): Promise<void> {
+  //   await db
+  //     .delete(servicePassengers)
+  //     .where(eq(servicePassengers.servicoId, serviceId));
+  // }
 
   // Sale Clients operations - Unified client management for sales
   async getSaleClients(vendaId: number): Promise<SaleClient[]> {

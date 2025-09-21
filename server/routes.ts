@@ -738,82 +738,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Service Passengers routes - Passageiros por serviço com valores individuais
-  app.get('/api/services/:serviceId/passengers', isAuthenticated, async (req, res) => {
-    try {
-      const serviceId = parseInt(req.params.serviceId);
-      if (isNaN(serviceId) || serviceId <= 0) {
-        return res.status(400).json({ message: "ID do serviço inválido" });
-      }
-      const servicePassengers = await storage.getServicePassengers(serviceId);
-      res.json(servicePassengers);
-    } catch (error) {
-      console.error("Error fetching service passengers:", error);
-      res.status(500).json({ message: "Failed to fetch service passengers" });
-    }
-  });
+  // DEPRECATED: Service Passengers routes - Use serviceClients instead
+  // app.get('/api/services/:serviceId/passengers', isAuthenticated, async (req, res) => {
+  //   try {
+  //     const serviceId = parseInt(req.params.serviceId);
+  //     if (isNaN(serviceId) || serviceId <= 0) {
+  //       return res.status(400).json({ message: "ID do serviço inválido" });
+  //     }
+  //     const servicePassengers = await storage.getServicePassengers(serviceId);
+  //     res.json(servicePassengers);
+  //   } catch (error) {
+  //     console.error("Error fetching service passengers:", error);
+  //     res.status(500).json({ message: "Failed to fetch service passengers" });
+  //   }
+  // });
 
-  app.post('/api/services/:serviceId/passengers', isAuthenticated, async (req, res) => {
-    try {
-      const serviceId = parseInt(req.params.serviceId);
-      if (isNaN(serviceId) || serviceId <= 0) {
-        return res.status(400).json({ message: "ID do serviço inválido" });
-      }
-      
-      const servicePassengerData = insertServicePassengerSchema.parse({ 
-        ...req.body, 
-        servicoId: serviceId 
-      });
-      
-      const servicePassenger = await storage.createServicePassenger(servicePassengerData);
-      res.json(servicePassenger);
-    } catch (error) {
-      console.error("Error creating service passenger:", error);
-      res.status(500).json({ message: "Failed to create service passenger" });
-    }
-  });
+  // DEPRECATED: Use serviceClients endpoints instead
+  // app.post('/api/services/:serviceId/passengers', isAuthenticated, async (req, res) => {
+  //   try {
+  //     const serviceId = parseInt(req.params.serviceId);
+  //     if (isNaN(serviceId) || serviceId <= 0) {
+  //       return res.status(400).json({ message: "ID do serviço inválido" });
+  //     }
+  //     
+  //     const servicePassengerData = insertServicePassengerSchema.parse({ 
+  //       ...req.body, 
+  //       servicoId: serviceId 
+  //     });
+  //     
+  //     const servicePassenger = await storage.createServicePassenger(servicePassengerData);
+  //     res.json(servicePassenger);
+  //   } catch (error) {
+  //     console.error("Error creating service passenger:", error);
+  //     res.status(500).json({ message: "Failed to create service passenger" });
+  //   }
+  // });
 
-  app.put('/api/service-passengers/:id', isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id) || id <= 0) {
-        return res.status(400).json({ message: "ID inválido" });
-      }
-      const servicePassenger = await storage.updateServicePassenger(id, req.body);
-      res.json(servicePassenger);
-    } catch (error) {
-      console.error("Error updating service passenger:", error);
-      res.status(500).json({ message: "Failed to update service passenger" });
-    }
-  });
+  // DEPRECATED: Use serviceClients endpoints instead
+  // app.put('/api/service-passengers/:id', isAuthenticated, async (req, res) => {
+  //   try {
+  //     const id = parseInt(req.params.id);
+  //     if (isNaN(id) || id <= 0) {
+  //       return res.status(400).json({ message: "ID inválido" });
+  //     }
+  //     const servicePassenger = await storage.updateServicePassenger(id, req.body);
+  //     res.json(servicePassenger);
+  //   } catch (error) {
+  //     console.error("Error updating service passenger:", error);
+  //     res.status(500).json({ message: "Failed to update service passenger" });
+  //   }
+  // });
 
-  app.delete('/api/service-passengers/:id', isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id) || id <= 0) {
-        return res.status(400).json({ message: "ID inválido" });
-      }
-      await storage.deleteServicePassenger(id);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting service passenger:", error);
-      res.status(500).json({ message: "Failed to delete service passenger" });
-    }
-  });
+  // DEPRECATED: Use serviceClients endpoints instead
+  // app.delete('/api/service-passengers/:id', isAuthenticated, async (req, res) => {
+  //   try {
+  //     const id = parseInt(req.params.id);
+  //     if (isNaN(id) || id <= 0) {
+  //       return res.status(400).json({ message: "ID inválido" });
+  //     }
+  //     await storage.deleteServicePassenger(id);
+  //     res.status(204).send();
+  //   } catch (error) {
+  //     console.error("Error deleting service passenger:", error);
+  //     res.status(500).json({ message: "Failed to delete service passenger" });
+  //   }
+  // });
 
-  app.delete('/api/services/:serviceId/passengers', isAuthenticated, async (req, res) => {
-    try {
-      const serviceId = parseInt(req.params.serviceId);
-      if (isNaN(serviceId) || serviceId <= 0) {
-        return res.status(400).json({ message: "ID do serviço inválido" });
-      }
-      await storage.deleteServicePassengersByService(serviceId);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting all service passengers:", error);
-      res.status(500).json({ message: "Failed to delete service passengers" });
-    }
-  });
+  // DEPRECATED: Use serviceClients endpoints instead
+  // app.delete('/api/services/:serviceId/passengers', isAuthenticated, async (req, res) => {
+  //   try {
+  //     const serviceId = parseInt(req.params.serviceId);
+  //     if (isNaN(serviceId) || serviceId <= 0) {
+  //       return res.status(400).json({ message: "ID do serviço inválido" });
+  //     }
+  //     await storage.deleteServicePassengersByService(serviceId);
+  //     res.status(204).send();
+  //   } catch (error) {
+  //     console.error("Error deleting all service passengers:", error);
+  //     res.status(500).json({ message: "Failed to delete service passengers" });
+  //   }
+  // });
 
   // Payment methods routes
   app.get('/api/payment-methods', isAuthenticated, async (req, res) => {

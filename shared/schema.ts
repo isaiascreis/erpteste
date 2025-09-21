@@ -1,4 +1,4 @@
-import { sql, relations } from "drizzle-orm";
+import { sql, relations, eq } from "drizzle-orm";
 import {
   boolean,
   decimal,
@@ -10,6 +10,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -188,7 +189,12 @@ export const saleClients = pgTable("sale_clients", {
   clienteId: integer("cliente_id").references(() => clients.id).notNull(),
   funcao: passengerRoleEnum("funcao").notNull(), // contratante ou passageiro
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  // Unique constraint: each client can only be assigned once per sale
+  uniqueClientPerSale: uniqueIndex("sale_clients_venda_cliente_unique").on(table.vendaId, table.clienteId),
+  // Partial unique: only one contratante per sale
+  uniqueContratantePerSale: uniqueIndex("sale_clients_venda_contratante_unique").on(table.vendaId).where(eq(table.funcao, 'contratante')),
+}));
 
 // NEW: Service Clients (substituí servicePassengers - usa clienteId)
 export const serviceClients = pgTable("service_clients", {
@@ -198,7 +204,10 @@ export const serviceClients = pgTable("service_clients", {
   valorVenda: decimal("valor_venda", { precision: 10, scale: 2 }).default("0.00"),
   valorCusto: decimal("valor_custo", { precision: 10, scale: 2 }).default("0.00"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  // Unique constraint: each client can only be assigned once per service
+  uniqueClientPerService: uniqueIndex("service_clients_servico_cliente_unique").on(table.servicoId, table.clienteId),
+}));
 
 // Sale Sellers
 export const saleSellers = pgTable("sale_sellers", {
