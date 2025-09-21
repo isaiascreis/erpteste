@@ -234,7 +234,7 @@ export const bankTransactions = pgTable("bank_transactions", {
 // WhatsApp Conversations
 export const whatsappConversations = pgTable("whatsapp_conversations", {
   id: serial("id").primaryKey(),
-  phone: varchar("phone", { length: 20 }).notNull().unique(),
+  phone: varchar("phone", { length: 100 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   avatar: text("avatar"),
   isOnline: boolean("is_online").default(false).notNull(),
