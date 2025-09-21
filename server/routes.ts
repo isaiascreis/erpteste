@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from 'ws';
 import { storage } from "./storage";
 import { setupSimpleAuth, isAuthenticated } from "./simpleAuth";
-import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema, insertSaleRequirementSchema, insertSaleCommissionSchema, insertNotificationSchema, insertPaymentPlanSchema, insertPaymentMethodSchema, insertPaymentConditionSchema, insertServicePassengerSchema } from "@shared/schema";
+import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema, insertSaleRequirementSchema, insertSaleCommissionSchema, insertNotificationSchema, insertPaymentPlanSchema, insertPaymentMethodSchema, insertPaymentConditionSchema, insertServicePassengerSchema, insertSaleClientSchema, insertServiceClientSchema } from "@shared/schema";
 import { z } from "zod";
 import { WhatsAppAPI, whatsappIntegration } from "./whatsapp";
 
@@ -632,6 +632,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting payment plan:", error);
       res.status(500).json({ message: "Failed to delete payment plan" });
+    }
+  });
+
+  // Sale Clients routes - Unified client management for sales
+  app.get('/api/sales/:id/clients', isAuthenticated, async (req, res) => {
+    try {
+      const vendaId = parseInt(req.params.id);
+      if (isNaN(vendaId) || vendaId <= 0) {
+        return res.status(400).json({ message: "ID da venda inválido" });
+      }
+      
+      const clients = await storage.getSaleClients(vendaId);
+      res.json(clients);
+    } catch (error) {
+      console.error("Error fetching sale clients:", error);
+      res.status(500).json({ message: "Erro ao buscar clientes da venda" });
+    }
+  });
+
+  app.post('/api/sales/:id/clients', isAuthenticated, async (req, res) => {
+    try {
+      const vendaId = parseInt(req.params.id);
+      if (isNaN(vendaId) || vendaId <= 0) {
+        return res.status(400).json({ message: "ID da venda inválido" });
+      }
+
+      const clientData = insertSaleClientSchema.omit({ id: true, vendaId: true }).parse(req.body);
+      const saleClient = await storage.addSaleClient(vendaId, clientData);
+      res.json(saleClient);
+    } catch (error) {
+      console.error("Error adding sale client:", error);
+      if (error instanceof Error && error.message === "Uma venda só pode ter um contratante") {
+        return res.status(409).json({ message: error.message });
+      }
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", issues: error.issues });
+      }
+      res.status(500).json({ message: "Erro ao adicionar cliente à venda" });
+    }
+  });
+
+  app.delete('/api/sale-clients/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "ID do cliente da venda inválido" });
+      }
+
+      await storage.removeSaleClient(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing sale client:", error);
+      res.status(500).json({ message: "Erro ao remover cliente da venda" });
+    }
+  });
+
+  // Service Clients routes - Client assignments to services
+  app.get('/api/services/:id/clients', isAuthenticated, async (req, res) => {
+    try {
+      const servicoId = parseInt(req.params.id);
+      if (isNaN(servicoId) || servicoId <= 0) {
+        return res.status(400).json({ message: "ID do serviço inválido" });
+      }
+      
+      const clients = await storage.getServiceClients(servicoId);
+      res.json(clients);
+    } catch (error) {
+      console.error("Error fetching service clients:", error);
+      res.status(500).json({ message: "Erro ao buscar clientes do serviço" });
+    }
+  });
+
+  app.post('/api/services/:id/clients', isAuthenticated, async (req, res) => {
+    try {
+      const servicoId = parseInt(req.params.id);
+      if (isNaN(servicoId) || servicoId <= 0) {
+        return res.status(400).json({ message: "ID do serviço inválido" });
+      }
+
+      const clientData = insertServiceClientSchema.omit({ id: true, servicoId: true }).parse(req.body);
+      const serviceClient = await storage.upsertServiceClient({ servicoId, ...clientData });
+      res.json(serviceClient);
+    } catch (error) {
+      console.error("Error adding/updating service client:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dados inválidos", issues: error.issues });
+      }
+      res.status(500).json({ message: "Erro ao adicionar/atualizar cliente do serviço" });
+    }
+  });
+
+  app.delete('/api/service-clients/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ message: "ID do cliente do serviço inválido" });
+      }
+
+      await storage.removeServiceClient(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing service client:", error);
+      res.status(500).json({ message: "Erro ao remover cliente do serviço" });
     }
   });
 

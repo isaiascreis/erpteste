@@ -7,6 +7,8 @@ import {
   passengers,
   services,
   servicePassengers,
+  saleClients,
+  serviceClients,
   saleSellers,
   bankAccounts,
   accountCategories,
@@ -36,6 +38,10 @@ import {
   type InsertService,
   type ServicePassenger,
   type InsertServicePassenger,
+  type SaleClient,
+  type InsertSaleClient,
+  type ServiceClient,
+  type InsertServiceClient,
   type SaleSeller,
   type InsertSaleSeller,
   type BankAccount,
@@ -197,6 +203,16 @@ export interface IStorage {
   updateServicePassenger(id: number, data: Partial<InsertServicePassenger>): Promise<ServicePassenger>;
   deleteServicePassenger(id: number): Promise<void>;
   deleteServicePassengersByService(serviceId: number): Promise<void>;
+
+  // Sale Clients operations - Unified client management for sales
+  getSaleClients(vendaId: number): Promise<SaleClient[]>;
+  addSaleClient(vendaId: number, data: { clienteId: number; funcao: "contratante" | "passageiro" }): Promise<SaleClient>;
+  removeSaleClient(id: number): Promise<void>;
+
+  // Service Clients operations - Client assignments to services
+  getServiceClients(servicoId: number): Promise<ServiceClient[]>;
+  upsertServiceClient(data: { servicoId: number; clienteId: number; valorVenda?: string; valorCusto?: string }): Promise<ServiceClient>;
+  removeServiceClient(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2055,6 +2071,125 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(servicePassengers)
       .where(eq(servicePassengers.servicoId, serviceId));
+  }
+
+  // Sale Clients operations - Unified client management for sales
+  async getSaleClients(vendaId: number): Promise<SaleClient[]> {
+    return await db
+      .select()
+      .from(saleClients)
+      .where(eq(saleClients.vendaId, vendaId))
+      .orderBy(asc(saleClients.id));
+  }
+
+  async addSaleClient(vendaId: number, data: { clienteId: number; funcao: "contratante" | "passageiro" }): Promise<SaleClient> {
+    // Check for existing record to prevent duplicates
+    const existing = await db
+      .select()
+      .from(saleClients)
+      .where(
+        and(
+          eq(saleClients.vendaId, vendaId),
+          eq(saleClients.clienteId, data.clienteId),
+          eq(saleClients.funcao, data.funcao)
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
+    // Enforce single contratante rule
+    if (data.funcao === "contratante") {
+      const existingContratante = await db
+        .select()
+        .from(saleClients)
+        .where(
+          and(
+            eq(saleClients.vendaId, vendaId),
+            eq(saleClients.funcao, "contratante")
+          )
+        )
+        .limit(1);
+
+      if (existingContratante.length > 0) {
+        throw new Error("Uma venda só pode ter um contratante");
+      }
+    }
+
+    const [created] = await db
+      .insert(saleClients)
+      .values({
+        vendaId,
+        ...data,
+      })
+      .returning();
+
+    return created;
+  }
+
+  async removeSaleClient(id: number): Promise<void> {
+    await db
+      .delete(saleClients)
+      .where(eq(saleClients.id, id));
+  }
+
+  // Service Clients operations - Client assignments to services
+  async getServiceClients(servicoId: number): Promise<ServiceClient[]> {
+    return await db
+      .select()
+      .from(serviceClients)
+      .where(eq(serviceClients.servicoId, servicoId))
+      .orderBy(asc(serviceClients.id));
+  }
+
+  async upsertServiceClient(data: { servicoId: number; clienteId: number; valorVenda?: string; valorCusto?: string }): Promise<ServiceClient> {
+    // Check if record exists
+    const existing = await db
+      .select()
+      .from(serviceClients)
+      .where(
+        and(
+          eq(serviceClients.servicoId, data.servicoId),
+          eq(serviceClients.clienteId, data.clienteId)
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Update existing record only with provided fields
+      const updateData: any = {};
+      if (data.valorVenda !== undefined) updateData.valorVenda = data.valorVenda;
+      if (data.valorCusto !== undefined) updateData.valorCusto = data.valorCusto;
+
+      // If no fields to update, return existing record
+      if (Object.keys(updateData).length === 0) {
+        return existing[0];
+      }
+
+      const [updated] = await db
+        .update(serviceClients)
+        .set(updateData)
+        .where(eq(serviceClients.id, existing[0].id))
+        .returning();
+
+      return updated;
+    } else {
+      // Create new record
+      const [created] = await db
+        .insert(serviceClients)
+        .values(data)
+        .returning();
+
+      return created;
+    }
+  }
+
+  async removeServiceClient(id: number): Promise<void> {
+    await db
+      .delete(serviceClients)
+      .where(eq(serviceClients.id, id));
   }
 }
 
