@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -209,7 +209,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
   // Hydrate requirements state from fetched data
   useEffect(() => {
-    if (saleRequirements) {
+    if (saleRequirements && Array.isArray(saleRequirements)) {
       setRequirements(saleRequirements);
     }
   }, [saleRequirements]);
@@ -705,7 +705,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     }
 
     // Include selected passengers and their values
-    serviceData.servicePassengers = Object.entries(servicePassengers)
+    (serviceData as any).servicePassengers = Object.entries(servicePassengers)
       .filter(([_, data]) => data.selected)
       .map(([passageiroId, data]) => ({
         passageiroId: parseInt(passageiroId),
@@ -727,7 +727,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   };
 
   const handleAddSeller = (data: SellerFormData) => {
-    const seller = sellers?.find(s => s.id === data.vendedorId);
+    const seller = (sellers && Array.isArray(sellers)) ? sellers.find((s: any) => s.id === data.vendedorId) : null;
     if (!seller) return;
 
     const valorComissao = (totals.valorTotal * Number(data.comissaoPercentual)) / 100;
@@ -1090,7 +1090,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   <p><strong>Descrição:</strong> {service.descricao}</p>
                   {service.localizador && <p><strong>Localizador:</strong> {service.localizador}</p>}
                   {service.fornecedorId && (
-                    <p><strong>Fornecedor:</strong> {suppliers?.find((s: any) => s.id === service.fornecedorId)?.nome || 'N/A'}</p>
+                    <p><strong>Fornecedor:</strong> {(suppliers && Array.isArray(suppliers)) ? suppliers.find((s: any) => s.id === service.fornecedorId)?.nome || 'N/A' : 'N/A'}</p>
                   )}
                   
                   {/* Flight Details Display */}
@@ -1172,7 +1172,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
             {salesSellers.map((seller) => (
               <div key={seller.id} className="flex items-center justify-between p-3 bg-muted rounded-lg" data-testid={`seller-item-${seller.id}`}>
                 <div>
-                  <div className="font-medium">{sellers?.find((s: any) => s.id === seller.vendedorId)?.nome || 'Vendedor não encontrado'}</div>
+                  <div className="font-medium">{(sellers && Array.isArray(sellers)) ? sellers.find((s: any) => s.id === seller.vendedorId)?.nome || 'Vendedor não encontrado' : 'Vendedor não encontrado'}</div>
                   <div className="text-sm text-muted-foreground">
                     {seller.percentualComissao}% de comissão • R$ {parseFloat(seller.valorComissao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </div>
@@ -1568,6 +1568,9 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
             <DialogTitle>
               {editingItem ? "Editar Passageiro" : "Adicionar Passageiro"}
             </DialogTitle>
+            <DialogDescription>
+              {editingItem ? "Modifique as informações do passageiro" : "Adicione um novo passageiro à reserva"}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <p>Modal content will be implemented here</p>
@@ -1582,6 +1585,9 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
             <DialogTitle>
               {editingItem ? "Editar Serviço" : "Adicionar Serviço"}
             </DialogTitle>
+            <DialogDescription>
+              {editingItem ? "Modifique as informações do serviço" : "Adicione um novo serviço à reserva"}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <p>Formulário de serviço será implementado em breve.</p>
@@ -1604,6 +1610,9 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
             <DialogTitle>
               {editingItem ? "Editar Vendedor" : "Adicionar Vendedor"}
             </DialogTitle>
+            <DialogDescription>
+              {editingItem ? "Modifique as informações do vendedor" : "Adicione um novo vendedor à reserva"}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <p>Formulário de vendedor será implementado em breve.</p>
@@ -1626,6 +1635,9 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
             <DialogTitle>
               {editingItem ? "Editar Pagamento" : "Adicionar Pagamento"}
             </DialogTitle>
+            <DialogDescription>
+              {editingItem ? "Modifique as informações do pagamento" : "Adicione um novo pagamento à reserva"}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <p>Formulário de pagamento será implementado em breve.</p>
@@ -1648,6 +1660,9 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
             <DialogTitle>
               {editingItem ? "Editar Requisito" : "Adicionar Requisito"}
             </DialogTitle>
+            <DialogDescription>
+              {editingItem ? "Modifique as informações do requisito" : "Adicione um novo requisito à reserva"}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <p>Formulário de requisito será implementado em breve.</p>
