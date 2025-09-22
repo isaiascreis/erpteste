@@ -50,7 +50,7 @@ export function LiquidationModal({
 
   const liquidateMutation = useMutation({
     mutationFn: async (data: any) => {
-      await apiRequest("PUT", `/api/financial-accounts/${account.id}/liquidate`, data);
+      await apiRequest(`/api/financial-accounts/${account.id}/liquidate`, "PUT", data);
     },
     onSuccess: () => {
       toast({ title: "Conta liquidada com sucesso!" });

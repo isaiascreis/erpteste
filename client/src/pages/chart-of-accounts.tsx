@@ -67,7 +67,7 @@ export default function ChartOfAccounts() {
 
   const createMutation = useMutation({
     mutationFn: async (data: CategoryFormData) => {
-      await apiRequest("POST", "/api/account-categories", data);
+      await apiRequest("/api/account-categories", "POST", data);
     },
     onSuccess: () => {
       toast({ title: "Categoria criada com sucesso!" });
@@ -86,7 +86,7 @@ export default function ChartOfAccounts() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: CategoryFormData) => {
-      await apiRequest("PUT", `/api/account-categories/${editingCategory.id}`, data);
+      await apiRequest(`/api/account-categories/${editingCategory.id}`, "PUT", data);
     },
     onSuccess: () => {
       toast({ title: "Categoria atualizada com sucesso!" });
@@ -106,7 +106,7 @@ export default function ChartOfAccounts() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/account-categories/${id}`);
+      await apiRequest(`/api/account-categories/${id}`, "DELETE");
     },
     onSuccess: () => {
       toast({ title: "Categoria excluída com sucesso!" });

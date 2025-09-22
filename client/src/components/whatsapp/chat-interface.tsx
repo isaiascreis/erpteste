@@ -148,7 +148,7 @@ export function ChatInterface() {
   // Mutation para enviar mensagem
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { phone: string; message: string }) => {
-      return apiRequest('POST', '/api/whatsapp/send', data);
+      return apiRequest('/api/whatsapp/send', 'POST', data);
     },
     onSuccess: () => {
       setNewMessage("");
@@ -174,13 +174,13 @@ export function ChatInterface() {
   const createConversationMutation = useMutation({
     mutationFn: async (data: NewContactFormData) => {
       // Primeiro criar a conversa
-      const conversation = await apiRequest('POST', '/api/whatsapp/conversations', {
+      const conversation = await apiRequest('/api/whatsapp/conversations', 'POST', {
         phone: data.phone,
         name: data.name
       });
       
       // Depois enviar a mensagem inicial
-      await apiRequest('POST', '/api/whatsapp/send', {
+      await apiRequest('/api/whatsapp/send', 'POST', {
         phone: data.phone,
         message: data.message
       });

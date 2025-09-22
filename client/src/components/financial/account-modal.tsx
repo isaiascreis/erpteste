@@ -44,7 +44,7 @@ export function AccountModal({ open, onClose, account, categories }: AccountModa
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/financial-accounts", data),
+    mutationFn: (data: any) => apiRequest("/api/financial-accounts", "POST", data),
     onSuccess: () => {
       toast({ title: "Lançamento criado com sucesso!" });
       queryClient.invalidateQueries({ queryKey: ["/api/financial-accounts"] });
@@ -61,7 +61,7 @@ export function AccountModal({ open, onClose, account, categories }: AccountModa
 
   const updateMutation = useMutation({
     mutationFn: (data: any) => 
-      apiRequest("PUT", `/api/financial-accounts/${account.id}`, data),
+      apiRequest(`/api/financial-accounts/${account.id}`, "PUT", data),
     onSuccess: () => {
       toast({ title: "Lançamento atualizado com sucesso!" });
       queryClient.invalidateQueries({ queryKey: ["/api/financial-accounts"] });

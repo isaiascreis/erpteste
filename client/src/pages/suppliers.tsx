@@ -60,7 +60,7 @@ export default function Suppliers() {
 
   const createMutation = useMutation({
     mutationFn: async (data: SupplierFormData) => {
-      await apiRequest("POST", "/api/suppliers", data);
+      await apiRequest("/api/suppliers", "POST", data);
     },
     onSuccess: () => {
       toast({ title: "Fornecedor criado com sucesso!" });
@@ -90,7 +90,7 @@ export default function Suppliers() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: SupplierFormData) => {
-      await apiRequest("PUT", `/api/suppliers/${editingSupplier.id}`, data);
+      await apiRequest(`/api/suppliers/${editingSupplier.id}`, "PUT", data);
     },
     onSuccess: () => {
       toast({ title: "Fornecedor atualizado com sucesso!" });
@@ -121,7 +121,7 @@ export default function Suppliers() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/suppliers/${id}`);
+      await apiRequest(`/api/suppliers/${id}`, "DELETE");
     },
     onSuccess: () => {
       toast({ title: "Fornecedor excluído com sucesso!" });

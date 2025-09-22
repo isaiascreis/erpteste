@@ -62,7 +62,7 @@ export default function Clients() {
 
   const createMutation = useMutation({
     mutationFn: async (data: ClientFormData) => {
-      await apiRequest("POST", "/api/clients", data);
+      await apiRequest("/api/clients", "POST", data);
     },
     onSuccess: () => {
       toast({ title: "Cliente criado com sucesso!" });
@@ -92,7 +92,7 @@ export default function Clients() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: ClientFormData) => {
-      await apiRequest("PUT", `/api/clients/${editingClient.id}`, data);
+      await apiRequest(`/api/clients/${editingClient.id}`, "PUT", data);
     },
     onSuccess: () => {
       toast({ title: "Cliente atualizado com sucesso!" });
@@ -123,7 +123,7 @@ export default function Clients() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/clients/${id}`);
+      await apiRequest(`/api/clients/${id}`, "DELETE");
     },
     onSuccess: () => {
       toast({ title: "Cliente excluído com sucesso!" });
