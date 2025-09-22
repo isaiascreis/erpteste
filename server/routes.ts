@@ -1397,9 +1397,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // WhatsApp integrado - Status do servidor
-  app.get('/api/whatsapp/status', async (req, res) => {
+  app.get('/api/whatsapp/status', isAuthenticated, async (req, res) => {
     try {
-      const status = WhatsAppAPI.getStatus();
+      const status = await WhatsAppAPI.getStatus();
       res.json(status);
     } catch (error) {
       console.error("Error getting WhatsApp status:", error);
@@ -1408,10 +1408,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // WhatsApp integrado - QR Code
-  app.get('/api/whatsapp/qr', async (req, res) => {
+  app.get('/api/whatsapp/qr', isAuthenticated, async (req, res) => {
     try {
-      const qrCode = WhatsAppAPI.getQRCode();
-      const status = WhatsAppAPI.getStatus();
+      const qrCode = await WhatsAppAPI.getQRCode();
+      const status = await WhatsAppAPI.getStatus();
       
       if (qrCode) {
         res.json({ qrCode, status: status.status });
@@ -1449,9 +1449,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // WhatsApp integrado - Reconectar / Forçar nova autenticação
-  app.post('/api/whatsapp/reconnect', async (req, res) => {
+  app.post('/api/whatsapp/reconnect', isAuthenticated, async (req, res) => {
     try {
-      await whatsappIntegration.forceReauth();
+      // Como estamos usando servidor externo, delegamos a reconexão para o proxy
+      await WhatsAppAPI.forceReauth();
       res.json({ 
         success: true,
         message: 'Forçando nova autenticação. Aguarde alguns segundos para o novo QR Code.' 

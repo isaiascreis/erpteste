@@ -85,22 +85,20 @@ class WhatsAppExternalClient {
   async getStatus(): Promise<WhatsAppStatus> {
     try {
       const data = await this.makeRequest('/status');
+      console.log('📥 Dados recebidos do servidor externo:', JSON.stringify(data, null, 2));
       
       return {
         status: data.status || 'Desconectado',
         qrCode: data.qrCode,
         uptime: data.uptime || '0s',
-        ready: data.status === 'Conectado',
+        ready: data.status === 'Conectado' || data.status === 'conectado',
         connectionCount: 1,
         lastActivity: new Date().toISOString()
       };
     } catch (error) {
-      return {
-        status: 'Servidor Externo Indisponível',
-        uptime: '0s',
-        ready: false,
-        connectionCount: 0
-      };
+      console.error('❌ Erro ao obter status do servidor externo:', error);
+      // Relançar exceção para que rotas retornem erro 500
+      throw new Error(`Servidor WhatsApp externo indisponível: ${error.message}`);
     }
   }
 
@@ -108,9 +106,12 @@ class WhatsAppExternalClient {
   async getQRCode(): Promise<string | null> {
     try {
       const data = await this.makeRequest('/qr');
+      console.log('📥 QR Code recebido do servidor externo:', data.qrCode ? 'QR Code válido' : 'QR Code vazio');
       return data.qrCode || null;
     } catch (error) {
-      return null;
+      console.error('❌ Erro ao obter QR Code do servidor externo:', error);
+      // Relançar exceção para que rotas retornem erro 500
+      throw new Error(`Servidor WhatsApp externo indisponível: ${error.message}`);
     }
   }
 
@@ -165,13 +166,9 @@ class WhatsAppIntegration {
     try {
       return await this.client.getStatus();
     } catch (error) {
-      const uptime = Math.round((Date.now() - this.startTime) / 1000);
-      return {
-        status: 'Erro de Conexão',
-        uptime: `${uptime}s`,
-        ready: false,
-        connectionCount: 0
-      };
+      console.error('❌ WhatsAppIntegration.getStatus() - Servidor externo indisponível:', error);
+      // Relançar a exceção para que as rotas possam retornar erro 500
+      throw new Error(`Servidor WhatsApp externo indisponível: ${error.message}`);
     }
   }
 
@@ -180,7 +177,9 @@ class WhatsAppIntegration {
     try {
       return await this.client.getQRCode();
     } catch (error) {
-      return null;
+      console.error('❌ WhatsAppIntegration.getQRCode() - Servidor externo indisponível:', error);
+      // Relançar a exceção para que as rotas possam retornar erro 500
+      throw new Error(`Servidor WhatsApp externo indisponível: ${error.message}`);
     }
   }
 
@@ -232,6 +231,7 @@ export const WhatsAppAPI = {
   getStatus: () => whatsappIntegration.getStatus(),
   getQRCode: () => whatsappIntegration.getQRCode(),
   sendMessage: (phone: string, message: string) => whatsappIntegration.sendMessage(phone, message),
+  forceReauth: () => whatsappIntegration.forceReauth(),
   isReady: () => whatsappIntegration.isReady(),
   onMessageReceived: null as ((conversationId: number, message: any) => void) | null
 };
