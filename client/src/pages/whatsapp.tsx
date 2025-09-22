@@ -345,11 +345,7 @@ export default function WhatsApp() {
                     onClick={async () => {
                       try {
                         const newMode = whatsappMode === 'cloud' ? 'proxy' : 'cloud';
-                        const response = await apiRequest(`/api/whatsapp/switch-mode`, {
-                          method: 'POST',
-                          body: JSON.stringify({ mode: newMode }),
-                          headers: { 'Content-Type': 'application/json' }
-                        });
+                        const response = await apiRequest(`/api/whatsapp/switch-mode`, 'POST', { mode: newMode });
                         
                         if (response.ok) {
                           setWhatsappMode(newMode);
