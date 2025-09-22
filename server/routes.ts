@@ -346,13 +346,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/sales', isAuthenticated, async (req, res) => {
     try {
+      console.log("=== SALE CREATION DEBUG ===");
+      console.log("Received sale data:", JSON.stringify(req.body, null, 2));
+      
       const saleData = req.body;
+      
+      // Validate required fields
+      if (!saleData.clienteId) {
+        console.error("Missing clienteId");
+        return res.status(400).json({ message: "clienteId is required" });
+      }
+      
+      // Sanitize OCR data to prevent production issues
+      if (saleData.services?.length) {
+        saleData.services = saleData.services.map(service => {
+          if (service.detalhes && service.detalhes.voos) {
+            // Ensure all string fields are trimmed and not too long
+            service.detalhes.voos = service.detalhes.voos.map(voo => ({
+              ...voo,
+              numeroVoo: voo.numeroVoo?.toString().trim().substring(0, 20) || '',
+              companhiaAerea: voo.companhiaAerea?.toString().trim().substring(0, 50) || '',
+              aeroportoOrigem: voo.aeroportoOrigem?.toString().trim().substring(0, 10) || '',
+              aeroportoDestino: voo.aeroportoDestino?.toString().trim().substring(0, 10) || '',
+              horarioEmbarque: voo.horarioEmbarque?.toString().trim().substring(0, 10) || '',
+              horarioChegada: voo.horarioChegada?.toString().trim().substring(0, 10) || '',
+              classe: voo.classe?.toString().trim().substring(0, 20) || '',
+              observacoes: voo.observacoes?.toString().trim().substring(0, 500) || '',
+            }));
+          }
+          return service;
+        });
+      }
+      
+      console.log("Calling storage.createSale...");
       const sale = await storage.createSale(saleData);
+      console.log("Sale created successfully:", sale.id);
       
       // Generate automatic tasks if sale is confirmed
       if (sale.status === 'venda') {
         try {
+          console.log("Generating automatic tasks...");
           await storage.generateTasksFromTemplates(sale.id, sale);
+          console.log("Tasks generated successfully");
         } catch (taskError) {
           console.error("Error generating automatic tasks:", taskError);
           // Don't fail the whole request if task generation fails
@@ -361,8 +396,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(sale);
     } catch (error) {
-      console.error("Error creating sale:", error);
-      res.status(500).json({ message: "Failed to create sale" });
+      console.error("=== SALE CREATION ERROR ===");
+      console.error("Error type:", error.constructor.name);
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+      console.error("Request body:", JSON.stringify(req.body, null, 2));
+      
+      // Return more specific error info in development
+      const isDev = process.env.NODE_ENV === 'development';
+      res.status(500).json({ 
+        message: "Failed to create sale",
+        ...(isDev && { 
+          error: error.message,
+          type: error.constructor.name,
+          stack: error.stack 
+        })
+      });
     }
   });
 
