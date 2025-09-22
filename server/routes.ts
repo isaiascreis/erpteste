@@ -1435,6 +1435,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public diagnostic endpoint for production troubleshooting
+  app.get('/api/whatsapp/diagnostic', async (req, res) => {
+    try {
+      const diagnostic = {
+        mode: process.env.WHATSAPP_MODE || 'auto-detected',
+        hasAccessToken: !!process.env.WHATSAPP_ACCESS_TOKEN,
+        hasPhoneNumberId: !!process.env.WHATSAPP_PHONE_NUMBER_ID,
+        hasServiceUrl: !!process.env.WHATSAPP_SERVICE_URL,
+        hasServiceSecret: !!process.env.WHATSAPP_SERVICE_SECRET,
+        nodeEnv: process.env.NODE_ENV,
+        timestamp: new Date().toISOString()
+      };
+      res.json(diagnostic);
+    } catch (error) {
+      console.error("Error getting diagnostic:", error);
+      res.status(500).json({ message: "Erro no diagnóstico" });
+    }
+  });
+
   // WhatsApp integrado - QR Code
   // Get WhatsApp Mode
   app.get('/api/whatsapp/mode', isAuthenticated, async (req, res) => {
