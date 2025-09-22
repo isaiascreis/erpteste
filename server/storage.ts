@@ -643,46 +643,74 @@ export class DatabaseStorage implements IStorage {
         })
         .returning();
 
-      // Create passengers
+      // Create passengers with proper date conversion
       if (saleData.passengers?.length) {
         for (const passenger of saleData.passengers) {
           // Only create passengers with valid names
           if (passenger.nome && passenger.nome.trim()) {
-            await tx.insert(passengers).values({
+            const passengerData = {
               vendaId: sale.id,
-              ...passenger,
-            });
+              nome: passenger.nome,
+              cpf: passenger.cpf || null,
+              funcao: passenger.funcao || 'passageiro',
+              observacoes: passenger.observacoes || '',
+              // Convert string dates to Date objects
+              dataNascimento: passenger.dataNascimento ? new Date(passenger.dataNascimento) : null,
+            };
+            await tx.insert(passengers).values(passengerData);
           }
         }
       }
 
-      // Create services
+      // Create services with proper data handling
       if (saleData.services?.length) {
         for (const service of saleData.services) {
-          await tx.insert(services).values({
+          const serviceData = {
             vendaId: sale.id,
-            ...service,
-          });
+            tipo: service.tipo,
+            descricao: service.descricao || '',
+            localizador: service.localizador || '',
+            fornecedorId: service.fornecedorId || null,
+            valorVenda: service.valorVenda?.toString() || '0',
+            valorCusto: service.valorCusto?.toString() || '0',
+            detalhes: service.detalhes || {},
+            dataInicio: service.dataInicio ? new Date(service.dataInicio) : null,
+            dataFim: service.dataFim ? new Date(service.dataFim) : null,
+          };
+          await tx.insert(services).values(serviceData);
         }
       }
 
-      // Create sale sellers
+      // Create sale sellers with proper data handling
       if (saleData.sellers?.length) {
         for (const seller of saleData.sellers) {
-          await tx.insert(saleSellers).values({
+          const sellerData = {
             vendaId: sale.id,
-            ...seller,
-          });
+            vendedorId: seller.vendedorId,
+            comissaoPercentual: seller.comissaoPercentual?.toString() || '0',
+            valorComissao: seller.valorComissao?.toString() || '0',
+          };
+          await tx.insert(saleSellers).values(sellerData);
         }
       }
 
-      // Create payment plans
+      // Create payment plans with proper date conversion
       if (saleData.paymentPlans?.length) {
         for (const plan of saleData.paymentPlans) {
-          await tx.insert(paymentPlans).values({
+          const planData = {
             vendaId: sale.id,
-            ...plan,
-          });
+            descricao: plan.descricao || '',
+            valor: plan.valor?.toString() || '0',
+            valorPago: plan.valorPago?.toString() || '0',
+            dataVencimento: plan.dataVencimento ? new Date(plan.dataVencimento) : null,
+            dataPrevisaoPagamento: plan.dataPrevisaoPagamento ? new Date(plan.dataPrevisaoPagamento) : null,
+            formaPagamento: plan.formaPagamento || '',
+            quemRecebe: plan.quemRecebe || 'AGENCIA',
+            clientePaganteId: plan.clientePaganteId || null,
+            contaBancariaId: plan.contaBancariaId ? parseInt(plan.contaBancariaId) : null,
+            observacoes: plan.observacoes || '',
+          };
+          await tx.insert(paymentPlans).values(planData);
         }
       }
 
