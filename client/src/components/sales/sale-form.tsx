@@ -1364,7 +1364,11 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               <div className="flex items-center space-x-4">
                 {steps.map((stepItem, index) => (
                   <div key={stepItem.id} className="flex items-center space-x-2">
-                    <div className={`flex items-center space-x-2 ${step === stepItem.id ? 'text-primary' : 'text-muted-foreground'}`}>
+                    <div 
+                      className={`flex items-center space-x-2 cursor-pointer hover:text-primary transition-colors ${step === stepItem.id ? 'text-primary' : 'text-muted-foreground'}`}
+                      onClick={() => setStep(stepItem.id)}
+                      data-testid={`step-${stepItem.id}`}
+                    >
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                         step === stepItem.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                       }`}>
@@ -1441,9 +1445,11 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   {steps.map((stepItem) => (
                     <div
                       key={stepItem.id}
-                      className={`flex items-center space-x-3 p-2 rounded-lg ${
+                      className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer hover:bg-primary/5 transition-colors ${
                         step === stepItem.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
                       }`}
+                      onClick={() => setStep(stepItem.id)}
+                      data-testid={`sidebar-step-${stepItem.id}`}
                     >
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
                         step === stepItem.id ? 'bg-primary text-primary-foreground' : 'bg-muted'
@@ -1569,7 +1575,93 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Other modals will be implemented here */}
+      {/* Service Modal */}
+      <Dialog open={showServiceModal} onOpenChange={setShowServiceModal}>
+        <DialogContent className="max-w-4xl" data-testid="dialog-service">
+          <DialogHeader>
+            <DialogTitle>
+              {editingItem ? "Editar Serviço" : "Adicionar Serviço"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>Formulário de serviço será implementado em breve.</p>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowServiceModal(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={() => setShowServiceModal(false)}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Seller Modal */}
+      <Dialog open={showSellerModal} onOpenChange={setShowSellerModal}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-seller">
+          <DialogHeader>
+            <DialogTitle>
+              {editingItem ? "Editar Vendedor" : "Adicionar Vendedor"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>Formulário de vendedor será implementado em breve.</p>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowSellerModal(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={() => setShowSellerModal(false)}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Modal */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-payment">
+          <DialogHeader>
+            <DialogTitle>
+              {editingItem ? "Editar Pagamento" : "Adicionar Pagamento"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>Formulário de pagamento será implementado em breve.</p>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowPaymentModal(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={() => setShowPaymentModal(false)}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Requirement Modal */}
+      <Dialog open={showRequirementModal} onOpenChange={setShowRequirementModal}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-requirement">
+          <DialogHeader>
+            <DialogTitle>
+              {editingItem ? "Editar Requisito" : "Adicionar Requisito"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>Formulário de requisito será implementado em breve.</p>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowRequirementModal(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={() => setShowRequirementModal(false)}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
