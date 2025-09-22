@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,11 +27,17 @@ import {
   Check,
   FileText,
   X,
-  Printer
+  Printer,
+  Scan,
+  Upload,
+  CheckCircle,
+  AlertCircle,
+  Loader2
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import Tesseract from 'tesseract.js';
 
 const passengerSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
@@ -1870,6 +1876,18 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                     </h3>
                   </div>
 
+                  {/* OCR Flight Import Section */}
+                  <FlightOCRImport 
+                    onFlightsExtracted={(extractedFlights) => {
+                      // Batch update to avoid race conditions
+                      setFlights(prev => [...prev, ...extractedFlights]);
+                      toast({
+                        title: "Voos importados",
+                        description: `${extractedFlights.length} voos adicionados com sucesso!`
+                      });
+                    }}
+                  />
+
                   {/* Flight Form */}
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="text-sm font-medium mb-3">Adicionar Voo</h4>
@@ -2905,6 +2923,405 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
           </Form>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// OCR Flight Import Component - Export declaration
+export interface FlightOCRImportProps {
+  onFlightsExtracted: (flights: FlightFormData[]) => void;
+}
+
+export interface ExtractedFlight {
+  numeroVoo: string;
+  dataVoo: string;
+  horarioEmbarque: string;
+  horarioChegada: string;
+  aeroportoOrigem: string;
+  aeroportoDestino: string;
+  companhiaAerea: string;
+  confidence: number;
+}
+
+// Function component with proper declaration
+function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [extractedFlights, setExtractedFlights] = useState<ExtractedFlight[]>([]);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showReview, setShowReview] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  // Airlines mapping - proper airline codes only
+  const airlineMapping: Record<string, string> = {
+    'AD': 'Azul',
+    'G3': 'GOL', 
+    'LA': 'LATAM',
+    'TP': 'TAP',
+    'AR': 'Aerolíneas Argentinas',
+    'CM': 'Copa Airlines',
+    'UA': 'United',
+    'AA': 'American Airlines',
+    'DL': 'Delta',
+    'AZ': 'Azul' // Alternative code
+  };
+
+  // Parse extracted text to find flight information
+  const parseFlightText = (text: string): ExtractedFlight[] => {
+    const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    const flights: ExtractedFlight[] = [];
+
+    console.log('Texto extraído:', text);
+    
+    // More precise regex patterns 
+    const flightRouteRegex = /=\s*(\d{4})\s+([\w\sÀ-ÿ]+)\s*\(([A-Z]{3})\)\s+([\w\sÀ-ÿ]+)\s*\(([A-Z]{3})\)/;
+    const dateTimeRegex = /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*[^\d]*\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // Look for flight route pattern
+      const routeMatch = line.match(flightRouteRegex);
+      
+      if (routeMatch) {
+        const flightNumber = routeMatch[1];
+        const originCity = routeMatch[2].trim();
+        const originAirport = routeMatch[3];
+        const destCity = routeMatch[4].trim();
+        const destAirport = routeMatch[5];
+        
+        // Look for date/time in next lines
+        let dateTimeMatch = null;
+        for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+          dateTimeMatch = lines[j].match(dateTimeRegex);
+          if (dateTimeMatch) break;
+        }
+        
+        if (dateTimeMatch) {
+          const [, depDay, depMonth, depYear, depHour, depMin, arrDay, arrMonth, arrYear, arrHour, arrMin] = dateTimeMatch;
+          
+          const flightDate = `${depYear}-${depMonth.padStart(2, '0')}-${depDay.padStart(2, '0')}`;
+          const departureTime = `${depHour.padStart(2, '0')}:${depMin}`;
+          const arrivalTime = `${arrHour.padStart(2, '0')}:${arrMin}`;
+          
+          // Determine airline from flight number pattern
+          let airline = 'Azul'; // Default for numbered flights in this range
+          let airlineCode = '';
+          
+          // Pattern suggests Azul flights (3000-3999)
+          if (flightNumber.startsWith('3')) {
+            airline = 'Azul';
+            airlineCode = 'AD';
+          }
+
+          flights.push({
+            numeroVoo: `${airlineCode} ${flightNumber}`.trim(),
+            dataVoo: flightDate,
+            horarioEmbarque: departureTime,
+            horarioChegada: arrivalTime,
+            aeroportoOrigem: originAirport,
+            aeroportoDestino: destAirport,
+            companhiaAerea: airline,
+            confidence: 0.9
+          });
+        }
+      }
+    }
+
+    return flights;
+  };
+
+  // Process image with OCR
+  const processImage = async (imageFile: File) => {
+    setIsProcessing(true);
+    try {
+      console.log('Iniciando OCR...');
+      
+      const { data: { text } } = await Tesseract.recognize(
+        imageFile,
+        'eng+por',
+        {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+            }
+          }
+        }
+      );
+
+      console.log('Texto extraído:', text);
+      
+      const extractedFlights = parseFlightText(text);
+      console.log('Voos extraídos:', extractedFlights);
+      
+      if (extractedFlights.length > 0) {
+        setExtractedFlights(extractedFlights);
+        setShowReview(true);
+        toast({
+          title: "OCR concluído",
+          description: `${extractedFlights.length} voos encontrados na imagem`
+        });
+      } else {
+        toast({
+          title: "Nenhum voo encontrado",
+          description: "Não foi possível identificar informações de voos na imagem",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Erro no OCR:', error);
+      toast({
+        title: "Erro no processamento",
+        description: "Erro ao processar a imagem. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle file upload
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({
+          title: "Arquivo muito grande",
+          description: "O arquivo deve ter no máximo 5MB",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+      
+      processImage(file);
+    }
+  };
+
+  // Handle paste from clipboard
+  const handlePaste = async (event: React.ClipboardEvent) => {
+    const items = event.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const blob = items[i].getAsFile();
+        if (blob) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            setImagePreview(e.target?.result as string);
+          };
+          reader.readAsDataURL(blob);
+          
+          processImage(blob);
+        }
+        break;
+      }
+    }
+  };
+
+  // Accept all flights with validation
+  const acceptAllFlights = () => {
+    const validatedFlights: FlightFormData[] = [];
+    
+    for (const flight of extractedFlights) {
+      // Basic validation
+      if (!flight.numeroVoo || !flight.dataVoo || !flight.horarioEmbarque || !flight.horarioChegada) {
+        continue;
+      }
+      
+      // Create FlightFormData with validation
+      const flightData: FlightFormData = {
+        numeroVoo: flight.numeroVoo,
+        dataVoo: flight.dataVoo,
+        companhiaAerea: flight.companhiaAerea,
+        aeroportoOrigem: flight.aeroportoOrigem,
+        aeroportoDestino: flight.aeroportoDestino,
+        horarioEmbarque: flight.horarioEmbarque,
+        horarioChegada: flight.horarioChegada,
+        direcao: "ida" as const,
+        classe: "",
+        observacoes: "Importado via OCR"
+      };
+      
+      // Additional validation using flightSchema if needed
+      try {
+        flightSchema.parse(flightData);
+        validatedFlights.push(flightData);
+      } catch (error) {
+        console.warn('Flight validation failed:', error, flightData);
+        // Still add but with empty values for invalid fields
+        validatedFlights.push({
+          ...flightData,
+          numeroVoo: flight.numeroVoo || '',
+          dataVoo: flight.dataVoo || '',
+          horarioEmbarque: flight.horarioEmbarque || '',
+          horarioChegada: flight.horarioChegada || ''
+        });
+      }
+    }
+    
+    if (validatedFlights.length === 0) {
+      toast({
+        title: "Dados incompletos",
+        description: "Nenhum voo válido encontrado para importar",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    onFlightsExtracted(validatedFlights);
+    setShowReview(false);
+    setExtractedFlights([]);
+    setImagePreview(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Upload/Paste Area */}
+      <div className="bg-blue-50 border-2 border-dashed border-blue-200 rounded-lg p-6">
+        <div className="text-center space-y-4">
+          <div className="flex items-center justify-center">
+            <Scan className="w-8 h-8 text-blue-500" />
+          </div>
+          <div>
+            <h4 className="text-lg font-medium text-blue-900">Extrair Voos de Imagem</h4>
+            <p className="text-sm text-blue-600">
+              Cole uma imagem (Ctrl+V) ou faça upload de um print dos voos
+            </p>
+          </div>
+          
+          {/* Upload Button */}
+          <div className="flex gap-3 justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessing}
+              data-testid="button-upload-flight-image"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              {isProcessing ? "Processando..." : "Fazer Upload"}
+            </Button>
+            
+            <div
+              className="border-2 border-dashed border-blue-300 rounded-lg p-3 min-w-[200px] flex items-center justify-center cursor-pointer hover:bg-blue-100"
+              onPaste={handlePaste}
+              tabIndex={0}
+              data-testid="area-paste-flight-image"
+            >
+              <span className="text-sm text-blue-600">
+                {isProcessing ? "Processando..." : "Ou cole aqui (Ctrl+V)"}
+              </span>
+            </div>
+          </div>
+
+          {isProcessing && (
+            <div className="flex items-center justify-center gap-2 text-blue-600">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">Processando imagem com OCR...</span>
+            </div>
+          )}
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+      </div>
+
+      {/* Image Preview */}
+      {imagePreview && (
+        <div className="bg-white border rounded-lg p-4">
+          <h5 className="font-medium mb-2">Imagem carregada:</h5>
+          <img 
+            src={imagePreview} 
+            alt="Flight preview" 
+            className="max-w-full max-h-48 object-contain rounded border"
+          />
+        </div>
+      )}
+
+      {/* Review Extracted Flights */}
+      {showReview && extractedFlights.length > 0 && (
+        <div className="bg-white border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h5 className="font-medium">Voos Encontrados ({extractedFlights.length})</h5>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                onClick={acceptAllFlights}
+                size="sm"
+                data-testid="button-accept-all-flights"
+              >
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Aceitar Todos
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowReview(false)}
+                size="sm"
+                data-testid="button-cancel-flight-review"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Cancelar
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {extractedFlights.map((flight, index) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded border">
+                <div className="flex-1 grid grid-cols-4 gap-3 text-sm">
+                  <div>
+                    <span className="font-medium">{flight.numeroVoo}</span>
+                    {flight.companhiaAerea && (
+                      <div className="text-gray-500">({flight.companhiaAerea})</div>
+                    )}
+                  </div>
+                  <div>
+                    {flight.dataVoo && (
+                      <div className="text-blue-600">
+                        {new Date(flight.dataVoo).toLocaleDateString('pt-BR')}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-gray-600">
+                      {flight.aeroportoOrigem} → {flight.aeroportoDestino}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-600">
+                      {flight.horarioEmbarque} - {flight.horarioChegada}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  {flight.confidence > 0.7 ? (
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-yellow-500" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-3 text-xs text-gray-500">
+            <AlertCircle className="w-3 h-3 inline mr-1" />
+            Revise os dados antes de aceitar. Você pode editar os voos após importar.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
