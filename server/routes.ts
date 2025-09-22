@@ -1428,6 +1428,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/whatsapp/qr', isAuthenticated, async (req, res) => {
     try {
+      // 🔒 PROTEÇÃO: Bloquear QR Code no modo Cloud API
+      const mode = WhatsAppAPI.getMode();
+      if (mode === 'cloud') {
+        return res.status(400).json({ 
+          error: 'QR Code não disponível no modo Cloud API',
+          message: 'Cloud API não requer QR Code - use tokens de acesso direto',
+          mode: 'cloud'
+        });
+      }
+
       const qrCode = await WhatsAppAPI.getQRCode();
       const status = await WhatsAppAPI.getStatus();
       
@@ -1469,6 +1479,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // WhatsApp integrado - Reconectar / Forçar nova autenticação
   app.post('/api/whatsapp/reconnect', isAuthenticated, async (req, res) => {
     try {
+      // 🔒 PROTEÇÃO: Bloquear reconexão no modo Cloud API
+      const mode = WhatsAppAPI.getMode();
+      if (mode === 'cloud') {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Reconexão não disponível no modo Cloud API',
+          message: 'Cloud API usa tokens permanentes - verifique credenciais no Meta Business Manager',
+          mode: 'cloud'
+        });
+      }
+
       // Como estamos usando servidor externo, delegamos a reconexão para o proxy
       await WhatsAppAPI.forceReauth();
       res.json({ 
@@ -2121,6 +2142,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/whatsapp/webhook', async (req, res) => {
     try {
       const body = req.body;
+      
+      // 🔒 VALIDAÇÃO DE SEGURANÇA CRÍTICA
+      const signature = req.get('X-Hub-Signature-256');
+      const appSecret = process.env.WHATSAPP_CLOUD_APP_SECRET;
+      
+      if (appSecret && signature) {
+        const crypto = require('crypto');
+        const bodyStr = JSON.stringify(body);
+        const expectedSignature = 'sha256=' + crypto
+          .createHmac('sha256', appSecret)
+          .update(bodyStr)
+          .digest('hex');
+        
+        if (signature !== expectedSignature) {
+          console.error('❌ Webhook signature inválida - possível tentativa de spoofing');
+          return res.status(403).json({ error: 'Signature inválida' });
+        }
+        
+        console.log('✅ Webhook signature validada com sucesso');
+      } else if (appSecret) {
+        console.warn('⚠️ Webhook recebido sem signature - verificação ignorada (apenas para desenvolvimento)');
+      }
       
       // Verificar se é uma notificação do WhatsApp
       if (body.object === 'whatsapp_business_account') {
