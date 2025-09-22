@@ -173,24 +173,28 @@ export function ChatInterface() {
   // Mutation para criar nova conversa
   const createConversationMutation = useMutation({
     mutationFn: async (data: NewContactFormData) => {
-      // Criar apenas a conversa
-      const conversation = await apiRequest('/api/whatsapp/conversations', 'POST', {
+      const response = await apiRequest('/api/whatsapp/conversations', 'POST', {
         phone: data.phone,
         name: data.name
       });
       
-      return { conversation, messageData: { phone: data.phone, message: data.message } };
+      const conversation = await response.json();
+      
+      // Enviar mensagem inicial se fornecida
+      if (data.message.trim()) {
+        sendMessageMutation.mutate({
+          phone: data.phone, 
+          message: data.message
+        });
+      }
+      
+      return conversation;
     },
-    onSuccess: ({ conversation, messageData }) => {
+    onSuccess: (newConversation) => {
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations'] });
-      setSelectedConversation(conversation);
+      setSelectedConversation(newConversation);
       setShowNewContactDialog(false);
       form.reset();
-      
-      // Enviar mensagem inicial separadamente
-      if (messageData.message.trim()) {
-        sendMessageMutation.mutate(messageData);
-      }
       
       toast({
         title: "Conversa criada",
