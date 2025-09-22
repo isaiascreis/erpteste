@@ -180,21 +180,21 @@ export function ChatInterface() {
       
       const conversation = await response.json();
       
-      // Enviar mensagem inicial se fornecida
-      if (data.message.trim()) {
-        sendMessageMutation.mutate({
-          phone: data.phone, 
-          message: data.message
-        });
-      }
-      
-      return conversation;
+      return { conversation, messageData: data };
     },
-    onSuccess: (newConversation) => {
+    onSuccess: ({ conversation, messageData }) => {
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations'] });
-      setSelectedConversation(newConversation);
+      setSelectedConversation(conversation);
       setShowNewContactDialog(false);
       form.reset();
+      
+      // Enviar mensagem inicial se fornecida
+      if (messageData.message.trim()) {
+        sendMessageMutation.mutate({
+          phone: messageData.phone, 
+          message: messageData.message
+        });
+      }
       
       toast({
         title: "Conversa criada",
