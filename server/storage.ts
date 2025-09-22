@@ -163,6 +163,9 @@ export interface IStorage {
   // WhatsApp operations
   getWhatsAppConversations(): Promise<WhatsappConversation[]>;
   getOrCreateConversation(phone: string, name: string): Promise<WhatsappConversation>;
+  getConversationByPhone(phone: string): Promise<WhatsappConversation | null>;
+  createConversation(conversationData: InsertWhatsappConversation): Promise<WhatsappConversation>;
+  updateConversation(id: number, updates: Partial<InsertWhatsappConversation>): Promise<WhatsappConversation>;
   updateConversationStatus(id: number, isOnline: boolean): Promise<WhatsappConversation>;
   getConversationMessages(conversationId: number): Promise<WhatsappMessage[]>;
   createMessage(messageData: InsertWhatsappMessage): Promise<WhatsappMessage>;
@@ -1367,6 +1370,38 @@ export class DatabaseStorage implements IStorage {
         })
         .returning();
     }
+
+    return conversation;
+  }
+
+  async getConversationByPhone(phone: string): Promise<WhatsappConversation | null> {
+    const [conversation] = await db
+      .select()
+      .from(whatsappConversations)
+      .where(eq(whatsappConversations.phone, phone))
+      .limit(1);
+
+    return conversation || null;
+  }
+
+  async createConversation(conversationData: InsertWhatsappConversation): Promise<WhatsappConversation> {
+    const [conversation] = await db
+      .insert(whatsappConversations)
+      .values(conversationData)
+      .returning();
+
+    return conversation;
+  }
+
+  async updateConversation(id: number, updates: Partial<InsertWhatsappConversation>): Promise<WhatsappConversation> {
+    const [conversation] = await db
+      .update(whatsappConversations)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(whatsappConversations.id, id))
+      .returning();
 
     return conversation;
   }

@@ -2072,5 +2072,188 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // =====================================================================
+  // 🌟 WHATSAPP CLOUD API - WEBHOOKS
+  // =====================================================================
+  
+  // Verificação do webhook (Meta exige este endpoint para validar o webhook)
+  app.get('/api/whatsapp/webhook', (req, res) => {
+    try {
+      const mode = req.query['hub.mode'];
+      const token = req.query['hub.verify_token'];
+      const challenge = req.query['hub.challenge'];
+
+      const WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+
+      // Verificar se é uma solicitação de verificação válida
+      if (mode === 'subscribe' && token === WEBHOOK_VERIFY_TOKEN) {
+        console.log('✅ Webhook do WhatsApp Cloud API verificado com sucesso');
+        res.status(200).send(challenge);
+      } else {
+        console.error('❌ Falha na verificação do webhook - token inválido');
+        res.status(403).json({ error: 'Verificação de webhook inválida' });
+      }
+    } catch (error) {
+      console.error('❌ Erro na verificação do webhook:', error);
+      res.status(500).json({ error: 'Erro interno no webhook' });
+    }
+  });
+
+  // Receber mensagens via webhook
+  app.post('/api/whatsapp/webhook', async (req, res) => {
+    try {
+      const body = req.body;
+      
+      // Verificar se é uma notificação do WhatsApp
+      if (body.object === 'whatsapp_business_account') {
+        
+        // Processar cada entrada (entry)
+        for (const entry of body.entry || []) {
+          for (const change of entry.changes || []) {
+            
+            // Processar mensagens recebidas
+            if (change.value?.messages) {
+              for (const message of change.value.messages) {
+                await processIncomingWebhookMessage(message, change.value);
+              }
+            }
+            
+            // Processar status de mensagens (delivered, read, etc)
+            if (change.value?.statuses) {
+              for (const status of change.value.statuses) {
+                await processMessageStatus(status);
+              }
+            }
+          }
+        }
+      }
+      
+      // Responder rapidamente para o WhatsApp (requirement)
+      res.status(200).json({ status: 'success' });
+      
+    } catch (error) {
+      console.error('❌ Erro ao processar webhook:', error);
+      res.status(500).json({ error: 'Erro ao processar webhook' });
+    }
+  });
+
+  // Função auxiliar para processar mensagens recebidas
+  async function processIncomingWebhookMessage(message: any, value: any) {
+    try {
+      const phone = message.from;
+      const messageId = message.id;
+      const timestamp = new Date(parseInt(message.timestamp) * 1000);
+      
+      let content = '';
+      let type = 'text';
+      let mediaUrl = null;
+      let mediaType = null;
+      let fileName = null;
+
+      // Extrair conteúdo baseado no tipo de mensagem
+      if (message.type === 'text') {
+        content = message.text?.body || '';
+      } else if (message.type === 'image') {
+        content = message.image?.caption || '[Imagem]';
+        mediaUrl = message.image?.id; // Media ID do WhatsApp
+        mediaType = 'image';
+        type = 'image';
+      } else if (message.type === 'audio') {
+        content = '[Áudio]';
+        mediaUrl = message.audio?.id;
+        mediaType = 'audio';
+        type = 'audio';
+      } else if (message.type === 'video') {
+        content = message.video?.caption || '[Vídeo]';
+        mediaUrl = message.video?.id;
+        mediaType = 'video';
+        type = 'video';
+      } else if (message.type === 'document') {
+        content = `[Documento: ${message.document?.filename || 'arquivo'}]`;
+        mediaUrl = message.document?.id;
+        mediaType = 'document';
+        fileName = message.document?.filename;
+        type = 'document';
+      } else {
+        content = `[Mensagem não suportada: ${message.type}]`;
+        type = message.type;
+      }
+
+      // Buscar ou criar conversa
+      let conversation = await storage.getConversationByPhone(phone);
+      if (!conversation) {
+        // Tentar obter nome do contato do WhatsApp
+        const contactName = value.contacts?.[0]?.profile?.name || phone;
+        
+        conversation = await storage.createConversation({
+          phone,
+          name: contactName,
+          avatar: null,
+          isOnline: true,
+          unreadCount: 1,
+          lastMessageTime: timestamp,
+          clientId: null,
+          assignedUserId: null,
+          isAssigned: false,
+          priority: 'normal',
+          tags: []
+        });
+      } else {
+        // Atualizar conversa existente
+        await storage.updateConversation(conversation.id, {
+          lastMessageTime: timestamp,
+          unreadCount: conversation.unreadCount + 1,
+          isOnline: true
+        });
+      }
+
+      // Salvar mensagem
+      const savedMessage = await storage.createMessage({
+        conversationId: conversation.id,
+        messageId,
+        type,
+        content,
+        mediaUrl,
+        mediaType,
+        fileName,
+        fromMe: false,
+        timestamp,
+        status: 'received',
+        sentByUserId: null,
+        readByUsers: [],
+        isInternal: false
+      });
+
+      console.log(`📥 Mensagem recebida via webhook: ${phone} -> ${content.substring(0, 100)}`);
+      
+      // Notificar atendentes conectados via WebSocket
+      broadcastMessage({
+        type: 'NEW_MESSAGE',
+        conversationId: conversation.id,
+        message: savedMessage,
+        timestamp: new Date().toISOString()
+      }, conversation.id);
+
+    } catch (error) {
+      console.error('❌ Erro ao processar mensagem do webhook:', error);
+    }
+  }
+
+  // Função auxiliar para processar status de mensagens
+  async function processMessageStatus(status: any) {
+    try {
+      const messageId = status.id;
+      const newStatus = status.status; // sent, delivered, read, failed
+      
+      // Atualizar status da mensagem no banco
+      await storage.updateMessageStatus(messageId, newStatus);
+      
+      console.log(`📊 Status atualizado: ${messageId} -> ${newStatus}`);
+      
+    } catch (error) {
+      console.error('❌ Erro ao processar status de mensagem:', error);
+    }
+  }
+
   return httpServer;
 }
