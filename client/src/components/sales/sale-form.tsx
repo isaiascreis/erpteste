@@ -1559,30 +1559,6 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
           </div>
         </div>
       </div>
-
-      {/* Passenger Modal - With tabs for direct passenger or client search */}
-      <Dialog open={showPassengerModal} onOpenChange={setShowPassengerModal}>
-        <DialogContent className="max-w-2xl" data-testid="dialog-passenger">
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* Edit Mode: Tabs Layout */}
-            {isEditMode ? (
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-5">
-                  <TabsTrigger value="contratante" data-testid="tab-contratante">Contratante</TabsTrigger>
-                  <TabsTrigger value="servicos" data-testid="tab-servicos">Serviços</TabsTrigger>
-                  <TabsTrigger value="vendedores" data-testid="tab-vendedores">Vendedores</TabsTrigger>
-                  <TabsTrigger value="pagamentos" data-testid="tab-pagamentos">Pagamentos</TabsTrigger>
-                  <TabsTrigger value="tarefas" data-testid="tab-tarefas">Tarefas</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="contratante" className="mt-6">
-                  {/* Contratante content */}
-                  {renderContratanteContent()}
-                </TabsContent>
-
-                <TabsContent value="servicos" className="mt-6">
-                  {/* Serviços content */}
                   {renderServicosContent()}
                 </TabsContent>
 
@@ -1772,44 +1748,6 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     </div>
   );
 }
-                                    <p>📅 Check-in: {service.detalhes.dataCheckIn && new Date(service.detalhes.dataCheckIn).toLocaleDateString('pt-BR')} → Check-out: {service.detalhes.dataCheckOut && new Date(service.detalhes.dataCheckOut).toLocaleDateString('pt-BR')}</p>
-                                  )}
-                                  {service.detalhes.regimeAlimentacao && (
-                                    <p>🍽️ Regime: {service.detalhes.regimeAlimentacao.replace('-', ' ').replace('_', ' ').charAt(0).toUpperCase() + service.detalhes.regimeAlimentacao.replace('-', ' ').replace('_', ' ').slice(1)}</p>
-                                  )}
-                                  {service.detalhes.categoriaApartamento && (
-                                    <p>🛏️ Categoria: {service.detalhes.categoriaApartamento}</p>
-                                  )}
-                                  {service.detalhes.numeroDiarias && (
-                                    <p>📊 Diárias: {service.detalhes.numeroDiarias}</p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditingItem(service);
-                                serviceForm.reset(service);
-                                if (service.tipo === 'aereo' && service.detalhes) {
-                                  flightDetailsForm.reset(service.detalhes);
-                                }
-                                if (service.tipo === 'hotel' && service.detalhes) {
-                                  hotelDetailsForm.reset(service.detalhes);
-                                }
-                                setShowServiceModal(true);
-                              }}
-                              data-testid={`button-edit-service-${service.id}`}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setServices(services.filter(s => s.id !== service.id))}
                               data-testid={`button-delete-service-${service.id}`}
                             >
                               <Trash2 className="w-4 h-4 text-destructive" />
