@@ -13,12 +13,38 @@ export default function WhatsApp() {
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
+  const [whatsappMode, setWhatsappMode] = useState<"proxy" | "cloud">("proxy");
   const { toast } = useToast();
+
+  // Função para verificar modo do WhatsApp
+  const checkWhatsAppMode = async () => {
+    try {
+      const response = await fetch(`/api/whatsapp/mode`, { 
+        cache: 'no-store',
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setWhatsappMode(data.mode === 'cloud' ? 'cloud' : 'proxy');
+        console.log('WhatsApp mode:', data.mode);
+      }
+    } catch (error) {
+      console.warn('Failed to fetch WhatsApp mode:', error);
+    }
+  };
 
   // Função para verificar status do servidor
   const checkWhatsAppStatus = async () => {
     try {
       setIsChecking(true);
+      
+      // Verificar modo primeiro
+      await checkWhatsAppMode();
       
       // Adicionar timeout e retry para melhor confiabilidade
       const controller = new AbortController();
@@ -46,8 +72,12 @@ export default function WhatsApp() {
       
       console.log('WhatsApp server status:', data.status);
       
-      if (status === 'conectado' || isReady) {
+      if (status === 'conectado' || status.includes('pronto') || isReady) {
         setConnectionStatus("connected");
+        setQrCodeUrl(null);
+      } else if (whatsappMode === 'cloud') {
+        // Para Cloud API, não há QR code - pode estar desconectado ou sem credenciais
+        setConnectionStatus(status.includes('erro') ? "offline" : "disconnected");
         setQrCodeUrl(null);
       } else if (status.includes('aguardando') || status.includes('qr code')) {
         setConnectionStatus("disconnected");
@@ -288,63 +318,123 @@ export default function WhatsApp() {
             <CardTitle>Configurações do WhatsApp</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-center py-8">
-              <QrCode className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2" data-testid="text-whatsapp-status">
-                Status: {connectionStatus === "connected" ? "Conectado" : 
-                        connectionStatus === "offline" ? "Servidor Offline" :
-                        qrCodeUrl ? "Aguardando escaneamento do QR Code" : "Desconectado"}
-              </h3>
-              {connectionStatus !== "connected" && (
-                <div className="space-y-4">
-                  <p className="text-muted-foreground">
-                    Para conectar ou reconectar, escaneie o QR Code abaixo.
+            <div className="space-y-6">
+              
+              {/* Modo do WhatsApp */}
+              <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Settings className="w-5 h-5 text-blue-600" />
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-100">Modo de Conexão</h4>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Badge variant={whatsappMode === 'cloud' ? 'default' : 'secondary'}>
+                    {whatsappMode === 'cloud' ? '🌩️ Cloud API Oficial' : '🔗 Servidor Externo'}
+                  </Badge>
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    {whatsappMode === 'cloud' 
+                      ? 'API oficial do Meta Business - Sem QR Code necessário'
+                      : 'Servidor proxy externo - Requer QR Code para autenticação'
+                    }
                   </p>
-                  <div className="bg-muted p-8 rounded-lg inline-block">
-                    <div className="w-64 h-64 bg-white border-2 border-dashed border-muted-foreground rounded-lg flex items-center justify-center">
-                      {qrCodeUrl ? (
-                        <img 
-                          src={qrCodeUrl} 
-                          alt="WhatsApp QR Code" 
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <div className="text-center">
-                          <QrCode className="w-16 h-16 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">
-                            {isChecking ? "Carregando..." : "QR Code aparecerá aqui"}
-                          </p>
-                        </div>
-                      )}
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="text-center py-6">
+                <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${
+                  connectionStatus === 'connected' ? 'bg-green-100 text-green-600' :
+                  connectionStatus === 'offline' ? 'bg-red-100 text-red-600' :
+                  'bg-yellow-100 text-yellow-600'
+                }`}>
+                  {whatsappMode === 'cloud' ? <Settings className="w-8 h-8" /> : <QrCode className="w-8 h-8" />}
+                </div>
+                
+                <h3 className="text-lg font-semibold mb-2" data-testid="text-whatsapp-status">
+                  Status: {connectionStatus === "connected" ? "✅ Conectado" : 
+                          connectionStatus === "offline" ? "❌ Servidor Offline" :
+                          whatsappMode === 'cloud' ? "⚠️ Não Conectado" :
+                          qrCodeUrl ? "📱 Aguardando escaneamento do QR Code" : "❌ Desconectado"}
+                </h3>
+
+                {/* Cloud API - Sem QR Code */}
+                {whatsappMode === 'cloud' && (
+                  <div className="space-y-4">
+                    {connectionStatus === "connected" ? (
+                      <div className="bg-green-50 dark:bg-green-950 p-4 rounded-lg">
+                        <p className="text-green-700 dark:text-green-300">
+                          WhatsApp Business Cloud API está conectado e funcionando normalmente.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="bg-yellow-50 dark:bg-yellow-950 p-4 rounded-lg">
+                        <p className="text-yellow-700 dark:text-yellow-300">
+                          Verifique as credenciais da API no Meta Business Manager.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Proxy Mode - Com QR Code */}
+                {whatsappMode === 'proxy' && connectionStatus !== "connected" && (
+                  <div className="space-y-4">
+                    <p className="text-muted-foreground">
+                      Para conectar ou reconectar, escaneie o QR Code abaixo.
+                    </p>
+                    <div className="bg-muted p-8 rounded-lg inline-block">
+                      <div className="w-64 h-64 bg-white border-2 border-dashed border-muted-foreground rounded-lg flex items-center justify-center">
+                        {qrCodeUrl ? (
+                          <img 
+                            src={qrCodeUrl} 
+                            alt="WhatsApp QR Code" 
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <div className="text-center">
+                            <QrCode className="w-16 h-16 text-muted-foreground mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">
+                              {isChecking ? "Carregando..." : "QR Code aparecerá aqui"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <Button 
-                      onClick={fetchQRCode}
-                      disabled={isChecking}
-                      data-testid="button-generate-qr"
-                    >
-                      {isChecking ? "Carregando..." : "Gerar Novo QR Code"}
-                    </Button>
-                    <Button 
-                      onClick={reconnectWhatsApp}
-                      disabled={isChecking}
-                      variant="secondary"
-                      data-testid="button-reconnect"
-                    >
-                      {isChecking ? "Conectando..." : "Reconectar WhatsApp"}
-                    </Button>
-                    <Button 
-                      variant="outline"
-                      onClick={checkWhatsAppStatus}
-                      disabled={isChecking}
-                      data-testid="button-check-status"
-                    >
-                      Verificar Status
-                    </Button>
-                  </div>
+                )}
+
+                {/* Botões de ação */}
+                <div className="flex gap-2 flex-wrap justify-center mt-6">
+                  {whatsappMode === 'proxy' && (
+                    <>
+                      <Button 
+                        onClick={fetchQRCode}
+                        disabled={isChecking}
+                        data-testid="button-generate-qr"
+                      >
+                        {isChecking ? "Carregando..." : "Gerar Novo QR Code"}
+                      </Button>
+                      <Button 
+                        onClick={reconnectWhatsApp}
+                        disabled={isChecking}
+                        variant="secondary"
+                        data-testid="button-reconnect"
+                      >
+                        {isChecking ? "Conectando..." : "Reconectar WhatsApp"}
+                      </Button>
+                    </>
+                  )}
+                  <Button 
+                    variant="outline"
+                    onClick={checkWhatsAppStatus}
+                    disabled={isChecking}
+                    data-testid="button-check-status"
+                  >
+                    Verificar Status
+                  </Button>
                 </div>
-              )}
+              </div>
+
+              {/* Seção quando conectado */}
               {connectionStatus === "connected" && (
                 <div className="space-y-4">
                   <p className="text-emerald-600 font-semibold">✅ WhatsApp conectado com sucesso!</p>

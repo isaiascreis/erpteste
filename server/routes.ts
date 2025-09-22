@@ -1408,6 +1408,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // WhatsApp integrado - QR Code
+  // Get WhatsApp Mode
+  app.get('/api/whatsapp/mode', isAuthenticated, async (req, res) => {
+    try {
+      const mode = WhatsAppAPI.getMode();
+      res.json({ 
+        mode,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('❌ Erro ao obter modo WhatsApp:', error);
+      res.status(500).json({ 
+        error: 'Erro ao obter modo WhatsApp', 
+        message: (error as Error).message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   app.get('/api/whatsapp/qr', isAuthenticated, async (req, res) => {
     try {
       const qrCode = await WhatsAppAPI.getQRCode();
