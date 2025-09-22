@@ -781,9 +781,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const parsed = insertSaleClientSchema.omit({ id: true, vendaId: true }).parse(req.body);
       const clientData = {
+        vendaId,
         clienteId: parsed.clienteId,
-        funcao: parsed.funcao,
-        ...parsed
+        funcao: parsed.funcao
       };
       const saleClient = await storage.addSaleClient(vendaId, clientData);
       res.json(saleClient);
@@ -840,8 +840,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsed = insertServiceClientSchema.omit({ id: true, servicoId: true }).parse(req.body);
       const clientData = {
         servicoId,
-        clienteId: parsed.clienteId,
-        ...parsed
+        clienteId: parsed.clienteId
       };
       const serviceClient = await storage.upsertServiceClient(clientData);
       res.json(serviceClient);
