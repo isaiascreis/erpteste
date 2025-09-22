@@ -1880,16 +1880,25 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   {/* OCR Flight Import Section */}
                   <FlightOCRImport 
                     onFlightsExtracted={(extractedFlights) => {
-                      console.log('onFlightsExtracted callback executado com:', extractedFlights);
-                      // Batch update to avoid race conditions
-                      setFlights(prev => {
-                        const newFlights = [...prev, ...extractedFlights];
-                        console.log('Atualizando flights de', prev.length, 'para', newFlights.length, 'voos');
-                        return newFlights;
-                      });
+                      console.log('OCR: adicionando voos diretamente', extractedFlights);
+                      // Add flights directly and force re-render
+                      setFlights(extractedFlights);
+                      
+                      // Auto-add service with flights
+                      const serviceData = {
+                        tipo: "aereo" as const,
+                        descricao: `Voos importados via OCR - ${extractedFlights.length} voos`,
+                        localizador: "",
+                        valorVenda: "0",
+                        valorCusto: "0",
+                        detalhes: { voos: extractedFlights }
+                      };
+                      
+                      setServices(prev => [...prev, { ...serviceData, id: Date.now() }]);
+                      
                       toast({
-                        title: "Voos importados",
-                        description: `${extractedFlights.length} voos adicionados com sucesso!`
+                        title: "Voos salvos automaticamente",
+                        description: `${extractedFlights.length} voos importados e serviço criado!`
                       });
                     }}
                   />
