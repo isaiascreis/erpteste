@@ -1,6 +1,7 @@
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
+import { storage } from './storage';
 
 // Credenciais padrão para o sistema
 const DEFAULT_USERS = {
@@ -90,9 +91,43 @@ export async function setupSimpleAuth(app: Express) {
   });
 }
 
-// Middleware de autenticação
-// TEMPORARIAMENTE REMOVIDO - Sistema sem login
-export const isAuthenticated: RequestHandler = (req, res, next) => {
-  // Passa direto sem verificar autenticação
-  next();
+// Middleware de autenticação simples
+export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  try {
+    console.log('🔐 Middleware de autenticação executado para:', req.method, req.path);
+    
+    // Para desenvolvimento, criar/usar usuário admin padrão
+    const adminUserId = 'user123';
+    
+    // Verificar se já existe o usuário admin
+    let adminUser = await storage.getUser(adminUserId);
+    
+    if (!adminUser) {
+      // Criar usuário administrador padrão
+      console.log('👤 Criando usuário administrador padrão...');
+      adminUser = await storage.upsertUser({
+        id: adminUserId,
+        email: 'admin@mondial.com',
+        firstName: 'Sistema',
+        lastName: 'Administrador',
+        systemRole: 'admin',
+        ativo: true
+      });
+      console.log('✅ Usuário administrador criado:', adminUser.email, 'Role:', adminUser.systemRole);
+    } else {
+      console.log('👤 Usuário admin já existe:', adminUser.email, 'Role:', adminUser.systemRole);
+    }
+    
+    // Simular autenticação - definir req.user com o admin
+    (req as any).user = { 
+      id: adminUserId,
+      ...adminUser 
+    };
+    
+    console.log('✅ Usuário autenticado:', (req as any).user.id, 'Role:', (req as any).user.systemRole);
+    next();
+  } catch (error) {
+    console.error('❌ Erro no middleware de autenticação:', error);
+    res.status(500).json({ message: 'Erro interno no sistema de autenticação' });
+  }
 };
