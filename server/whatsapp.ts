@@ -98,7 +98,7 @@ class WhatsAppExternalClient {
     } catch (error) {
       console.error('❌ Erro ao obter status do servidor externo:', error);
       // Relançar exceção para que rotas retornem erro 500
-      throw new Error(`Servidor WhatsApp externo indisponível: ${error.message}`);
+      throw new Error(`Servidor WhatsApp externo indisponível: ${(error as Error).message}`);
     }
   }
 
@@ -111,7 +111,7 @@ class WhatsAppExternalClient {
     } catch (error) {
       console.error('❌ Erro ao obter QR Code do servidor externo:', error);
       // Relançar exceção para que rotas retornem erro 500
-      throw new Error(`Servidor WhatsApp externo indisponível: ${error.message}`);
+      throw new Error(`Servidor WhatsApp externo indisponível: ${(error as Error).message}`);
     }
   }
 
@@ -156,7 +156,7 @@ class WhatsAppIntegration {
   private startTime: number = Date.now();
 
   constructor() {
-    this.client = new WhatsAppExternalClient(WHATSAPP_SERVICE_URL, WHATSAPP_SERVICE_SECRET);
+    this.client = new WhatsAppExternalClient(WHATSAPP_SERVICE_URL!, WHATSAPP_SERVICE_SECRET!);
     this.status = 'Pronto - Servidor Externo';
     console.log('✅ WhatsApp Client Proxy inicializado');
   }
@@ -168,7 +168,7 @@ class WhatsAppIntegration {
     } catch (error) {
       console.error('❌ WhatsAppIntegration.getStatus() - Servidor externo indisponível:', error);
       // Relançar a exceção para que as rotas possam retornar erro 500
-      throw new Error(`Servidor WhatsApp externo indisponível: ${error.message}`);
+      throw new Error(`Servidor WhatsApp externo indisponível: ${(error as Error).message}`);
     }
   }
 
@@ -178,8 +178,8 @@ class WhatsAppIntegration {
       return await this.client.getQRCode();
     } catch (error) {
       console.error('❌ WhatsAppIntegration.getQRCode() - Servidor externo indisponível:', error);
-      // Relançar a exceção para que as rotas possam retornar erro 500
-      throw new Error(`Servidor WhatsApp externo indisponível: ${error.message}`);
+      // Relançar a exceção para que as rotas possam retornem erro 500
+      throw new Error(`Servidor WhatsApp externo indisponível: ${(error as Error).message}`);
     }
   }
 
