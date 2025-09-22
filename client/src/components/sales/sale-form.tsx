@@ -1559,33 +1559,25 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
           </div>
         </div>
       </div>
-                  {renderServicosContent()}
-                </TabsContent>
 
-                <TabsContent value="vendedores" className="mt-6">
-                  {/* Vendedores content */}
-                  {renderVendedoresContent()}
-                </TabsContent>
+      {/* Passenger Modal - With tabs for direct passenger or client search */}
+      <Dialog open={showPassengerModal} onOpenChange={setShowPassengerModal}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-passenger">
+          <DialogHeader>
+            <DialogTitle>
+              {editingItem ? "Editar Passageiro" : "Adicionar Passageiro"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>Modal content will be implemented here</p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-                <TabsContent value="pagamentos" className="mt-6">
-                  {/* Pagamentos content */}
-                  {renderPagamentosContent()}
-                </TabsContent>
-
-                <TabsContent value="tarefas" className="mt-6">
-                  {/* Tarefas content */}
-                  {renderTarefasContent()}
-                </TabsContent>
-              </Tabs>
-            ) : (
-              // Create Mode: Step-by-step Layout
-              <>
-                {/* Step 1: Client Selection */}
-                {step === 1 && renderContratanteContent()}
-                
-                {/* Step 2: Services */}
-                {step === 2 && renderServicosContent()}
-                
+      {/* Other modals will be implemented here */}
+    </div>
+  );
+}
                 {/* Step 3: Sellers */}
                 {step === 3 && renderVendedoresContent()}
                 
@@ -1748,30 +1740,6 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     </div>
   );
 }
-                              data-testid={`button-delete-service-${service.id}`}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center space-x-4">
-                            <span className="financial-positive">
-                              Venda: R$ {Number(service.valorVenda).toLocaleString('pt-BR')}
-                            </span>
-                            <span className="financial-negative">
-                              Custo: R$ {Number(service.valorCusto).toLocaleString('pt-BR')}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {services.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground" data-testid="no-services">
-                        <Plane className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                        <p>Nenhum serviço adicionado</p>
-                      </div>
                     )}
                   </div>
                 </CardContent>
