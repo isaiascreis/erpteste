@@ -3048,10 +3048,28 @@ function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
       if (extractedFlights.length > 0) {
         setExtractedFlights(extractedFlights);
         setShowReview(true);
-        toast({
-          title: "OCR concluído",
-          description: `${extractedFlights.length} voos encontrados na imagem`
-        });
+        
+        // Auto-accept if all required fields are present
+        const allValid = extractedFlights.every(flight => 
+          flight.numeroVoo && flight.dataVoo && flight.horarioEmbarque && flight.horarioChegada && flight.aeroportoOrigem && flight.aeroportoDestino
+        );
+        
+        if (allValid) {
+          // Auto-accept after 2 seconds to show user what was extracted
+          setTimeout(() => {
+            acceptAllFlights();
+          }, 2000);
+          
+          toast({
+            title: "Voos extraídos automaticamente!",
+            description: `${extractedFlights.length} voos completos serão adicionados em 2 segundos.`
+          });
+        } else {
+          toast({
+            title: "OCR concluído",
+            description: `${extractedFlights.length} voos encontrados. Revise e aceite para adicionar.`
+          });
+        }
       } else {
         toast({
           title: "Nenhum voo encontrado",
