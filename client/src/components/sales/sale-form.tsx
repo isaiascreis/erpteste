@@ -2095,7 +2095,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               )}
 
               {/* Passenger Selection Section - For all service types */}
-              {passengers.length > 0 && (
+              {(passengers.length > 0 || selectedClient) && (
                 <div className="space-y-4 border-t pt-4">
                   <h3 className="text-lg font-semibold">Selecionar Passageiros</h3>
                   <p className="text-sm text-gray-600">
@@ -2103,6 +2103,63 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   </p>
                   
                   <div className="space-y-3">
+                    {/* Show contracted client first if selected */}
+                    {selectedClient && (
+                      (() => {
+                        const contractantPassenger = {
+                          id: `client-${selectedClient.id}`,
+                          nome: selectedClient.nome,
+                          funcao: 'contratante'
+                        };
+                        const isSelected = selectedServicePassengers.some(sp => sp.passageiroId === contractantPassenger.id);
+                        const passengerData = selectedServicePassengers.find(sp => sp.passageiroId === contractantPassenger.id);
+                        
+                        return (
+                          <div key={contractantPassenger.id} className="border rounded-lg p-4">
+                            <div className="flex items-center space-x-3 mb-3">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleTogglePassengerSelection(contractantPassenger.id)}
+                                className="rounded"
+                                data-testid={`checkbox-passenger-${contractantPassenger.id}`}
+                              />
+                              <span className="font-medium">{contractantPassenger.nome}</span>
+                              <Badge variant="default">{contractantPassenger.funcao}</Badge>
+                            </div>
+                            
+                            {isSelected && (
+                              <div className="grid grid-cols-2 gap-3 ml-6">
+                                <div>
+                                  <label className="text-sm font-medium">Valor de Venda (R$)</label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="0,00"
+                                    value={passengerData?.valorVenda || "0"}
+                                    onChange={(e) => handleUpdatePassengerValue(contractantPassenger.id, 'valorVenda', e.target.value)}
+                                    data-testid={`input-passenger-sale-${contractantPassenger.id}`}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Valor de Custo (R$)</label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="0,00"
+                                    value={passengerData?.valorCusto || "0"}
+                                    onChange={(e) => handleUpdatePassengerValue(contractantPassenger.id, 'valorCusto', e.target.value)}
+                                    data-testid={`input-passenger-cost-${contractantPassenger.id}`}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()
+                    )}
+                    
+                    {/* Show other passengers */}
                     {passengers.map((passenger: any) => {
                       const isSelected = selectedServicePassengers.some(sp => sp.passageiroId === passenger.id);
                       const passengerData = selectedServicePassengers.find(sp => sp.passageiroId === passenger.id);
