@@ -628,7 +628,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { unreadOnly } = req.query;
       // Security: Always scope notifications to the authenticated user, ignore userId from query
       // For now, use a default user ID since the system is running without authentication
-      const userId = req.user?.id || 'user123';
+      const userId = (req.user as any)?.id || 'user123';
       const notifications = await storage.getNotifications(
         userId,
         unreadOnly === 'true'
@@ -658,7 +658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid notification ID" });
       }
       // For now, use a default user ID since the system is running without authentication
-      const userId = req.user?.id || 'user123';
+      const userId = (req.user as any)?.id || 'user123';
       const notification = await storage.markNotificationAsRead(id, userId);
       res.json(notification);
     } catch (error) {
