@@ -1502,10 +1502,6 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   <div className="flex space-x-2">
                     <Button
                       onClick={() => setStep(Math.max(1, step - 1))}
-                      variant="outline"
-                      disabled={step === 1}
-                      className="flex-1"
-                      data-testid="button-previous"
                     >
                       <ArrowLeft className="w-4 h-4 mr-2" />
                       Anterior
@@ -1514,10 +1510,6 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                       onClick={() => setStep(Math.min(5, step + 1))}
                       variant="outline"
                       disabled={step === 5}
-                      className="flex-1"
-                      data-testid="button-next"
-                    >
-                      Próximo
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </div>
@@ -1578,93 +1570,6 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     </div>
   );
 }
-            {!isEditMode && (
-              <Card data-testid="card-step-navigation">
-                <CardHeader>
-                  <CardTitle>Progresso</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {steps.map((stepItem) => (
-                    <div
-                      key={stepItem.id}
-                      className={`flex items-center space-x-3 p-2 rounded-lg ${
-                        step === stepItem.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
-                      }`}
-                    >
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                        step === stepItem.id ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                      }`}>
-                        {stepItem.id}
-                      </div>
-                      <span className="text-sm">{stepItem.name}</span>
-                      {step > stepItem.id && (
-                        <div className="ml-auto">
-                          <div className="w-4 h-4 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
-                            <div className="text-green-600 dark:text-green-400 text-xs">✓</div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Financial Summary */}
-            <Card data-testid="card-financial-summary">
-              <CardHeader>
-                <CardTitle>Resumo Financeiro</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Valor Total</span>
-                  <span className="financial-positive font-semibold" data-testid="text-total-value">
-                    R$ {totals.valorTotal.toLocaleString('pt-BR')}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Custo Total</span>
-                  <span className="financial-negative font-semibold" data-testid="text-total-cost">
-                    R$ {totals.custoTotal.toLocaleString('pt-BR')}
-                  </span>
-                </div>
-                <div className="border-t border-border pt-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-foreground">Lucro</span>
-                    <span className="text-emerald-600 font-bold text-lg" data-testid="text-profit">
-                      R$ {totals.lucro.toLocaleString('pt-BR')}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Margem: {totals.valorTotal ? ((totals.lucro / totals.valorTotal) * 100).toFixed(1) : 0}%
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              {!isEditMode && (
-                <>
-                  <div className="flex space-x-2">
-                    <Button
-                      onClick={() => setStep(Math.max(1, step - 1))}
-                      variant="outline"
-                      disabled={step === 1}
-                      className="flex-1"
-                      data-testid="button-previous"
-                    >
-                      <ArrowLeft className="w-4 h-4 mr-2" />
-                      Anterior
-                    </Button>
-                    <Button
-                      onClick={() => setStep(Math.min(5, step + 1))}
-                      variant="outline"
-                      disabled={step === 5}
-                      className="flex-1"
-                      data-testid="button-next"
-                    >
-                      Próximo
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </div>
