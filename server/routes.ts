@@ -353,25 +353,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Delete sale by ID
   app.delete('/api/sales/:id', isAuthenticated, async (req, res) => {
+    const saleId = req.params.id;
     try {
-      const saleId = parseInt(req.params.id);
-      if (isNaN(saleId) || saleId <= 0) {
-        return res.status(400).json({ message: "Invalid sale ID" });
+      console.log(`🗑️ DELETE /api/sales/${saleId} - User: ${req.user?.id}`);
+      
+      const id = parseInt(saleId);
+      if (isNaN(id) || id <= 0) {
+        console.log(`❌ Invalid sale ID: ${saleId}`);
+        return res.status(400).json({ 
+          message: "ID de venda inválido",
+          error: "INVALID_ID" 
+        });
+      }
+
+      // Check if sale exists first
+      console.log(`🔍 Checking if sale ${id} exists`);
+      const existingSale = await storage.getSaleById(id);
+      if (!existingSale) {
+        console.log(`❌ Sale not found: ${id}`);
+        return res.status(404).json({ 
+          message: "Venda não encontrada",
+          error: "SALE_NOT_FOUND" 
+        });
+      }
+
+      console.log(`🗑️ Starting deletion process for sale: ${existingSale.referencia}`);
+      
+      // Delete sale and all related records in a transaction
+      await storage.deleteSale(id);
+      
+      console.log(`✅ Sale ${id} deleted successfully`);
+      res.json({ 
+        message: "Venda excluída com sucesso",
+        referencia: existingSale.referencia 
+      });
+      
+    } catch (error) {
+      console.error(`❌ Error deleting sale ${saleId}:`, error);
+      
+      // Check for constraint violations
+      if (error instanceof Error && error.message.includes('foreign key constraint')) {
+        return res.status(409).json({ 
+          message: "Não é possível excluir esta venda pois possui dados financeiros vinculados",
+          error: "CONSTRAINT_VIOLATION",
+          suggestion: "Considere cancelar a venda ao invés de excluí-la"
+        });
       }
       
-      // First delete related records
-      await storage.deleteSaleServices(saleId);
-      await storage.deleteSalePassengers(saleId);
-      await storage.deleteSaleSellers(saleId);
-      await storage.deleteSaleRequirements(saleId);
+      // Check if it's a database connection error
+      if (error instanceof Error && error.message.includes('connection')) {
+        return res.status(503).json({ 
+          message: "Erro de conexão com banco de dados",
+          error: "DATABASE_CONNECTION_ERROR" 
+        });
+      }
       
-      // Then delete the sale itself
-      await storage.deleteSale(saleId);
-      
-      res.json({ message: "Sale deleted successfully" });
-    } catch (error) {
-      console.error("Error deleting sale:", error);
-      res.status(500).json({ message: "Failed to delete sale" });
+      // Generic server error
+      res.status(500).json({ 
+        message: "Erro interno do servidor ao excluir a venda",
+        error: "INTERNAL_SERVER_ERROR",
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 

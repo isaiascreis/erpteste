@@ -185,6 +185,7 @@ export interface IStorage {
   deleteSaleServices(saleId: number): Promise<void>;
   deleteSalePassengers(saleId: number): Promise<void>;
   deleteSaleSellers(saleId: number): Promise<void>;
+  deletePaymentPlans(saleId: number): Promise<void>;
   deleteSale(saleId: number): Promise<void>;
 
   // Sale commissions operations
@@ -1674,10 +1675,75 @@ export class DatabaseStorage implements IStorage {
       .where(eq(saleSellers.vendaId, saleId));
   }
 
-  async deleteSale(saleId: number): Promise<void> {
+  async deletePaymentPlans(saleId: number): Promise<void> {
     await db
-      .delete(sales)
-      .where(eq(sales.id, saleId));
+      .delete(paymentPlans)
+      .where(eq(paymentPlans.vendaId, saleId));
+  }
+
+  async deleteSale(saleId: number): Promise<void> {
+    return db.transaction(async (tx) => {
+      console.log(`🗑️ Starting deletion of sale ${saleId} and all related data`);
+      
+      // Delete in correct order to respect foreign key constraints
+      
+      // 1. Delete bank transactions that reference financial accounts of this sale
+      console.log(`🏦 Deleting bank transactions for sale ${saleId}`);
+      await tx.delete(bankTransactions).where(
+        sql`conta_financeira_id IN (SELECT id FROM financial_accounts WHERE venda_id = ${saleId})`
+      );
+      
+      // 2. Delete service passengers (legacy table)
+      console.log(`👥 Deleting service passengers for sale ${saleId}`);
+      await tx.delete(servicePassengers).where(
+        sql`servico_id IN (SELECT id FROM services WHERE venda_id = ${saleId})`
+      );
+      
+      // 3. Delete service clients
+      console.log(`👤 Deleting service clients for sale ${saleId}`);
+      await tx.delete(serviceClients).where(
+        sql`servico_id IN (SELECT id FROM services WHERE venda_id = ${saleId})`
+      );
+      
+      // 4. Delete sale clients
+      console.log(`👥 Deleting sale clients for sale ${saleId}`);
+      await tx.delete(saleClients).where(eq(saleClients.vendaId, saleId));
+      
+      // 5. Delete sale commissions
+      console.log(`💼 Deleting sale commissions for sale ${saleId}`);
+      await tx.delete(saleCommissions).where(eq(saleCommissions.vendaId, saleId));
+      
+      // 6. Delete financial accounts
+      console.log(`💰 Deleting financial accounts for sale ${saleId}`);
+      await tx.delete(financialAccounts).where(eq(financialAccounts.vendaId, saleId));
+      
+      // 7. Delete sale requirements
+      console.log(`📋 Deleting sale requirements for sale ${saleId}`);
+      await tx.delete(saleRequirements).where(eq(saleRequirements.vendaId, saleId));
+      
+      // 8. Delete payment plans
+      console.log(`💳 Deleting payment plans for sale ${saleId}`);
+      await tx.delete(paymentPlans).where(eq(paymentPlans.vendaId, saleId));
+      
+      // 9. Delete sale sellers
+      console.log(`🤝 Deleting sale sellers for sale ${saleId}`);
+      await tx.delete(saleSellers).where(eq(saleSellers.vendaId, saleId));
+      
+      // 10. Delete services
+      console.log(`🛫 Deleting services for sale ${saleId}`);
+      await tx.delete(services).where(eq(services.vendaId, saleId));
+      
+      // 11. Delete passengers
+      console.log(`👤 Deleting passengers for sale ${saleId}`);
+      await tx.delete(passengers).where(eq(passengers.vendaId, saleId));
+      
+      // 12. Finally delete the sale itself
+      console.log(`🎯 Deleting sale ${saleId}`);
+      const result = await tx.delete(sales).where(eq(sales.id, saleId));
+      
+      console.log(`✅ Sale ${saleId} and all related data deleted successfully`);
+      return result;
+    });
   }
 
   // Sale commissions operations
