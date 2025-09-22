@@ -656,8 +656,81 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     updateServiceTotals();
   }, [selectedServicePassengers]);
 
+  // Normalize flight data for robust deduplication
+  const normalizeFlightKey = (flight: FlightFormData): string => {
+    // Normalize flight number: remove spaces/dashes, uppercase
+    const normalizedFlightNumber = (flight.numeroVoo || '').replace(/[\s\-]/g, '').toUpperCase();
+    
+    // Normalize date to YYYY-MM-DD format
+    const normalizedDate = (() => {
+      const dateStr = flight.dataVoo || '';
+      // Handle common formats: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
+      const dateMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/) || 
+                       dateStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      if (dateMatch) {
+        if (dateMatch[1].length === 4) {
+          // YYYY-MM-DD format
+          return `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
+        } else {
+          // DD/MM/YYYY format
+          return `${dateMatch[3]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[1].padStart(2, '0')}`;
+        }
+      }
+      return dateStr.trim();
+    })();
+    
+    // Normalize time to HH:MM format
+    const normalizedTime = (() => {
+      const timeStr = flight.horarioEmbarque || '';
+      const timeMatch = timeStr.match(/^(\d{1,2}):?(\d{2})$/);
+      if (timeMatch) {
+        return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+      }
+      return timeStr.trim();
+    })();
+    
+    // Normalize airports: extract 3-letter codes or standardize
+    const normalizeAirport = (airport: string): string => {
+      const airportStr = (airport || '').toUpperCase().trim();
+      // Extract 3-letter IATA codes if present
+      const iataMatch = airportStr.match(/([A-Z]{3})/);
+      if (iataMatch) {
+        return iataMatch[1];
+      }
+      // Clean up common airport name variations
+      return airportStr
+        .replace(/AEROPORTO\s*/gi, '')
+        .replace(/AIRPORT\s*/gi, '')
+        .replace(/[\s\-\/]/g, '')
+        .substring(0, 10); // Limit length for comparison
+    };
+    
+    const normalizedOrigin = normalizeAirport(flight.aeroportoOrigem);
+    const normalizedDestination = normalizeAirport(flight.aeroportoDestino);
+    
+    // Create unique key from normalized components
+    return `${normalizedFlightNumber}|${normalizedDate}|${normalizedOrigin}|${normalizedDestination}|${normalizedTime}`;
+  };
+
+  // Enhanced flight deduplication using normalized keys
+  const isFlightDuplicate = (newFlight: FlightFormData, existingFlights: FlightFormData[]): boolean => {
+    const newFlightKey = normalizeFlightKey(newFlight);
+    const existingKeys = new Set(existingFlights.map(f => normalizeFlightKey(f)));
+    return existingKeys.has(newFlightKey);
+  };
+
   // Functions for managing flights
   const handleAddFlight = (data: FlightFormData) => {
+    // Check for duplicates before adding
+    if (isFlightDuplicate(data, flights)) {
+      toast({ 
+        title: "Voo já existe", 
+        description: "Este voo já foi adicionado à lista",
+        variant: "destructive" 
+      });
+      return;
+    }
+    
     setFlights([...flights, { ...data }]);
     flightForm.reset();
     toast({ title: "Voo adicionado com sucesso!" });
@@ -1906,18 +1979,44 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   {/* OCR Flight Import Section */}
                   <FlightOCRImport 
                     onFlightsExtracted={(extractedFlights) => {
-                      console.log('OCR: adicionando voos diretamente', extractedFlights);
-                      // Add flights directly and force re-render
-                      setFlights(extractedFlights);
+                      console.log('OCR: processando voos extraídos', extractedFlights);
                       
-                      // Auto-add service with flights
+                      // Deduplicate against existing flights
+                      const newFlights = extractedFlights.filter(extractedFlight => 
+                        !isFlightDuplicate(extractedFlight, flights)
+                      );
+                      
+                      if (newFlights.length === 0) {
+                        toast({
+                          title: "Nenhum voo novo",
+                          description: "Todos os voos extraídos já existem na lista",
+                          variant: "default"
+                        });
+                        return;
+                      }
+                      
+                      // Merge new flights with existing ones
+                      setFlights([...flights, ...newFlights]);
+                      
+                      const skippedCount = extractedFlights.length - newFlights.length;
+                      const message = skippedCount > 0 
+                        ? `${newFlights.length} voos novos adicionados, ${skippedCount} voos duplicados ignorados`
+                        : `${newFlights.length} voos adicionados com sucesso`;
+                      
+                      toast({
+                        title: "Voos importados via OCR",
+                        description: message
+                      });
+                      
+                      // Auto-add service with all flights (existing + new)
+                      const allFlights = [...flights, ...newFlights];
                       const serviceData = {
                         tipo: "aereo" as const,
-                        descricao: `Voos importados via OCR - ${extractedFlights.length} voos`,
+                        descricao: `Voos importados via OCR - ${allFlights.length} voos total`,
                         localizador: "",
                         valorVenda: "0",
                         valorCusto: "0",
-                        detalhes: { voos: extractedFlights }
+                        detalhes: { voos: allFlights }
                       };
                       
                       setServices(prev => [...prev, { ...serviceData, id: Date.now() }]);
@@ -3192,7 +3291,7 @@ function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
     }
   };
 
-  // Accept all flights with validation
+  // Accept all flights with validation and deduplication
   const acceptAllFlights = () => {
     console.log('acceptAllFlights chamado, extractedFlights:', extractedFlights);
     const validatedFlights: FlightFormData[] = [];
@@ -3203,8 +3302,8 @@ function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
         continue;
       }
       
-      // Create FlightFormData with validation
-      const flightData: FlightFormData = {
+      // Create FlightFormData object for deduplication check
+      const flightFormData: FlightFormData = {
         numeroVoo: flight.numeroVoo,
         dataVoo: flight.dataVoo,
         companhiaAerea: flight.companhiaAerea,
@@ -3216,20 +3315,25 @@ function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
         observacoes: "Importado via OCR"
       };
       
-      // Additional validation using flightSchema if needed
-      try {
-        flightSchema.parse(flightData);
-        validatedFlights.push(flightData);
-      } catch (error) {
-        console.warn('Flight validation failed:', error, flightData);
-        // Still add but with empty values for invalid fields
-        validatedFlights.push({
-          ...flightData,
-          numeroVoo: flight.numeroVoo || '',
-          dataVoo: flight.dataVoo || '',
-          horarioEmbarque: flight.horarioEmbarque || '',
-          horarioChegada: flight.horarioChegada || ''
-        });
+      // Check for duplicates against existing flights and already validated flights
+      if (!isFlightDuplicate(flightFormData, flights) && 
+          !isFlightDuplicate(flightFormData, validatedFlights)) {
+        
+        // Additional validation using flightSchema if needed
+        try {
+          flightSchema.parse(flightFormData);
+          validatedFlights.push(flightFormData);
+        } catch (error) {
+          console.warn('Flight validation failed:', error, flightFormData);
+          // Still add but with empty values for invalid fields
+          validatedFlights.push({
+            ...flightFormData,
+            numeroVoo: flight.numeroVoo || '',
+            dataVoo: flight.dataVoo || '',
+            horarioEmbarque: flight.horarioEmbarque || '',
+            horarioChegada: flight.horarioChegada || ''
+          });
+        }
       }
     }
     
@@ -3242,8 +3346,19 @@ function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
       return;
     }
 
+    const duplicateCount = extractedFlights.length - validatedFlights.length;
+    const message = duplicateCount > 0 
+      ? `${validatedFlights.length} voos novos importados, ${duplicateCount} duplicados ignorados`
+      : `${validatedFlights.length} voos importados com sucesso`;
+
     console.log('Chamando onFlightsExtracted com voos validados:', validatedFlights);
     onFlightsExtracted(validatedFlights);
+    
+    toast({
+      title: "Voos importados",
+      description: message
+    });
+    
     setShowReview(false);
     setExtractedFlights([]);
     setImagePreview(null);

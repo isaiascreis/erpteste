@@ -430,11 +430,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "clienteId is required" });
       }
       
-      // Sanitize OCR data to prevent production issues
+      // Flight normalization function for server-side deduplication
+      const normalizeFlightKey = (flight: any): string => {
+        const normalizedFlightNumber = (flight.numeroVoo || '').replace(/[\s\-]/g, '').toUpperCase();
+        
+        const normalizedDate = (() => {
+          const dateStr = flight.dataVoo || '';
+          const dateMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/) || 
+                           dateStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+          if (dateMatch) {
+            if (dateMatch[1].length === 4) {
+              return `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
+            } else {
+              return `${dateMatch[3]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[1].padStart(2, '0')}`;
+            }
+          }
+          return dateStr.trim();
+        })();
+        
+        const normalizedTime = (() => {
+          const timeStr = flight.horarioEmbarque || '';
+          const timeMatch = timeStr.match(/^(\d{1,2}):?(\d{2})$/);
+          if (timeMatch) {
+            return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+          }
+          return timeStr.trim();
+        })();
+        
+        const normalizeAirport = (airport: string): string => {
+          const airportStr = (airport || '').toUpperCase().trim();
+          const iataMatch = airportStr.match(/([A-Z]{3})/);
+          if (iataMatch) {
+            return iataMatch[1];
+          }
+          return airportStr
+            .replace(/AEROPORTO\s*/gi, '')
+            .replace(/AIRPORT\s*/gi, '')
+            .replace(/[\s\-\/]/g, '')
+            .substring(0, 10);
+        };
+        
+        const normalizedOrigin = normalizeAirport(flight.aeroportoOrigem);
+        const normalizedDestination = normalizeAirport(flight.aeroportoDestino);
+        
+        return `${normalizedFlightNumber}|${normalizedDate}|${normalizedOrigin}|${normalizedDestination}|${normalizedTime}`;
+      };
+
+      // Deduplicate flights in service details
+      const deduplicateFlights = (flights: any[]): any[] => {
+        if (!Array.isArray(flights)) return flights;
+        
+        const seenKeys = new Set<string>();
+        const uniqueFlights: any[] = [];
+        
+        for (const flight of flights) {
+          const key = normalizeFlightKey(flight);
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            uniqueFlights.push(flight);
+          }
+        }
+        
+        return uniqueFlights;
+      };
+
+      // Sanitize and deduplicate OCR data to prevent production issues
       if (saleData.services?.length) {
+        let totalFlightsBefore = 0;
+        let totalFlightsAfter = 0;
+        
         saleData.services = saleData.services.map(service => {
           if (service.detalhes && service.detalhes.voos) {
-            // Ensure all string fields are trimmed and not too long
+            const flightsBefore = service.detalhes.voos.length;
+            totalFlightsBefore += flightsBefore;
+            
+            // First sanitize data
             service.detalhes.voos = service.detalhes.voos.map(voo => ({
               ...voo,
               numeroVoo: voo.numeroVoo?.toString().trim().substring(0, 20) || '',
@@ -446,9 +516,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
               classe: voo.classe?.toString().trim().substring(0, 20) || '',
               observacoes: voo.observacoes?.toString().trim().substring(0, 500) || '',
             }));
+            
+            // Then deduplicate
+            service.detalhes.voos = deduplicateFlights(service.detalhes.voos);
+            
+            const flightsAfter = service.detalhes.voos.length;
+            totalFlightsAfter += flightsAfter;
+            
+            if (flightsBefore !== flightsAfter) {
+              console.log(`🚀 Server-side deduplication: ${flightsBefore} → ${flightsAfter} voos no serviço ${service.descricao}`);
+            }
           }
           return service;
         });
+        
+        if (totalFlightsBefore !== totalFlightsAfter) {
+          console.log(`✈️ Total server deduplication: ${totalFlightsBefore} → ${totalFlightsAfter} voos`);
+        }
       }
       
       console.log("Calling storage.createSale...");
