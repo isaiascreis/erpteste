@@ -599,7 +599,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dataPrevisaoRecebimento: z.string().optional().transform(val => val ? new Date(val) : undefined),
         observacoes: z.string().optional(),
       });
-      const updateData = updateSchema.parse(req.body);
+      const parsed = updateSchema.parse(req.body);
+      // Convert number percentual to string for database compatibility
+      const updateData = {
+        ...parsed,
+        percentual: parsed.percentual !== undefined ? parsed.percentual.toString() : undefined
+      };
       const commission = await storage.updateSaleCommission(id, updateData);
       res.json(commission);
     } catch (error) {
@@ -774,7 +779,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "ID da venda inválido" });
       }
 
-      const clientData = insertSaleClientSchema.omit({ id: true, vendaId: true }).parse(req.body);
+      const parsed = insertSaleClientSchema.omit({ id: true, vendaId: true }).parse(req.body);
+      const clientData = {
+        clienteId: parsed.clienteId || 0,
+        funcao: parsed.funcao || 'passageiro' as const,
+        ...parsed
+      };
       const saleClient = await storage.addSaleClient(vendaId, clientData);
       res.json(saleClient);
     } catch (error) {
@@ -827,8 +837,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "ID do serviço inválido" });
       }
 
-      const clientData = insertServiceClientSchema.omit({ id: true, servicoId: true }).parse(req.body);
-      const serviceClient = await storage.upsertServiceClient({ servicoId, ...clientData });
+      const parsed = insertServiceClientSchema.omit({ id: true, servicoId: true }).parse(req.body);
+      const clientData = {
+        servicoId,
+        clienteId: parsed.clienteId || 0,
+        ...parsed
+      };
+      const serviceClient = await storage.upsertServiceClient(clientData);
       res.json(serviceClient);
     } catch (error) {
       console.error("Error adding/updating service client:", error);
@@ -1627,7 +1642,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   console.log('🔗 Servidor WebSocket WhatsApp Multi-Atendente iniciado em /ws/whatsapp');
   
-  wss.on('connection', async (ws: typeof WebSocket, request: any) => {
+  wss.on('connection', async (ws: WebSocket, request: any) => {
     console.log('📱 Nova conexão WebSocket de atendente');
     
     let attendantId: string | null = null;
