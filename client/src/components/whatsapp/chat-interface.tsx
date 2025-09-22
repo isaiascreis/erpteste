@@ -173,14 +173,20 @@ export function ChatInterface() {
   // Mutation para criar nova conversa
   const createConversationMutation = useMutation({
     mutationFn: async (data: NewContactFormData) => {
-      const response = await apiRequest('/api/whatsapp/conversations', 'POST', {
-        phone: data.phone,
-        name: data.name
-      });
-      
-      const conversation = await response.json();
-      
-      return { conversation, messageData: data };
+      try {
+        const response = await apiRequest('/api/whatsapp/conversations', 'POST', {
+          phone: data.phone,
+          name: data.name
+        });
+        
+        const conversation = await response.json();
+        console.log("Conversation created successfully:", conversation);
+        
+        return { conversation, messageData: data };
+      } catch (error) {
+        console.error("Error in createConversationMutation:", error);
+        throw error;
+      }
     },
     onSuccess: ({ conversation, messageData }) => {
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/conversations'] });
@@ -202,6 +208,7 @@ export function ChatInterface() {
       });
     },
     onError: (error: any) => {
+      console.error("Full error details:", error);
       toast({
         title: "Erro ao criar conversa",
         description: error.message || "Tente novamente.",
