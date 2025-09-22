@@ -2116,6 +2116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // =====================================================================
   
   // Verificação do webhook (Meta exige este endpoint para validar o webhook)
+  // ⚠️ SEM AUTENTICAÇÃO - Meta precisa acessar diretamente
   app.get('/api/whatsapp/webhook', (req, res) => {
     try {
       const mode = req.query['hub.mode'];
