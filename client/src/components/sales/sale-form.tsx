@@ -745,7 +745,8 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     setEditingItem(null);
     serviceForm.reset();
     flightForm.reset();
-    setFlights([]);
+    // Don't clear flights if they were imported via OCR
+    // setFlights([]);
     setSelectedServicePassengers([]);
     hotelDetailsForm.reset();
   };
@@ -2098,7 +2099,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   </div>
 
                   {/* Flights List */}
-                  {console.log('Estado atual flights para exibição:', flights) || flights.length > 0 && (
+                  {flights.length > 0 && (
                     <div>
                       <h4 className="text-sm font-medium mb-2">Voos Adicionados ({flights.length})</h4>
                       <div className="space-y-2">
