@@ -978,7 +978,12 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
           )}
 
           <Button
-            onClick={() => setShowClientModal(true)}
+            onClick={() => {
+              console.log("🔍 DEBUG: Botão Criar Novo Cliente clicado");
+              console.log("🔍 DEBUG: showClientModal antes:", showClientModal);
+              setShowClientModal(true);
+              console.log("🔍 DEBUG: setShowClientModal(true) executado");
+            }}
             variant="outline"
             className="w-full"
             data-testid="button-create-client"
