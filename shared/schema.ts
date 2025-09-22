@@ -284,18 +284,37 @@ export const paymentPlans = pgTable("payment_plans", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Task Templates - Templates de tarefas automáticas configuráveis
+export const taskTemplates = pgTable("task_templates", {
+  id: serial("id").primaryKey(),
+  nome: varchar("nome", { length: 100 }).notNull(),
+  tipo: varchar("tipo", { length: 50 }).notNull(), // checkin, envio_cartinha, documentacao, etc
+  descricaoTemplate: text("descricao_template").notNull(),
+  regraTemporalizacao: varchar("regra_temporalizacao", { length: 50 }).notNull(), // antes_embarque, depois_viagem, durante_viagem, data_fixa
+  diasOffset: integer("dias_offset").notNull(), // Número de dias (positivo para depois, negativo para antes)
+  prioridadePadrao: varchar("prioridade_padrao", { length: 20 }).default("normal"), // baixa, normal, alta, urgente
+  responsavelPadraoId: varchar("responsavel_padrao_id").references(() => users.id),
+  ativo: boolean("ativo").default(true),
+  observacoesTemplate: text("observacoes_template"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Sale Requirements/Tasks - Tarefas e exigências da venda
 export const saleRequirements = pgTable("sale_requirements", {
   id: serial("id").primaryKey(),
   vendaId: integer("venda_id").references(() => sales.id).notNull(),
+  templateId: integer("template_id").references(() => taskTemplates.id), // Link para template (se gerada automaticamente)
   tipo: varchar("tipo", { length: 50 }).notNull(), // checkin, envio_cartinha, documentos, etc
+  titulo: varchar("titulo", { length: 255 }).notNull(), // Título da tarefa
   descricao: text("descricao").notNull(),
   dataVencimento: timestamp("data_vencimento"),
   responsavelId: varchar("responsavel_id").references(() => users.id),
-  status: varchar("status", { length: 20 }).default("pendente"), // pendente, em_andamento, concluida
+  status: varchar("status", { length: 20 }).default("pendente"), // pendente, em_andamento, concluida, cancelada
   prioridade: varchar("prioridade", { length: 20 }).default("normal"), // baixa, normal, alta, urgente
   observacoes: text("observacoes"),
   dataConclusao: timestamp("data_conclusao"),
+  geradaAutomaticamente: boolean("gerada_automaticamente").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -607,6 +626,7 @@ export const insertPaymentPlanSchema = createInsertSchema(paymentPlans).omit({ i
   dataPrevisaoPagamento: z.string().optional().transform(val => val ? new Date(val) : undefined),
   dataLiquidacao: z.string().optional().transform(val => val ? new Date(val) : undefined),
 });
+export const insertTaskTemplateSchema = createInsertSchema(taskTemplates).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSaleRequirementSchema = createInsertSchema(saleRequirements).omit({ id: true, createdAt: true, updatedAt: true }).extend({
   dataVencimento: z.string().optional().transform(val => val ? new Date(val) : undefined),
   dataConclusao: z.string().optional().transform(val => val ? new Date(val) : undefined),
@@ -670,6 +690,8 @@ export type WhatsappConversation = typeof whatsappConversations.$inferSelect;
 export type InsertWhatsappConversation = z.infer<typeof insertWhatsappConversationSchema>;
 export type WhatsappMessage = typeof whatsappMessages.$inferSelect;
 export type InsertWhatsappMessage = z.infer<typeof insertWhatsappMessageSchema>;
+export type TaskTemplate = typeof taskTemplates.$inferSelect;
+export type InsertTaskTemplate = z.infer<typeof insertTaskTemplateSchema>;
 export type SaleRequirement = typeof saleRequirements.$inferSelect;
 export type InsertSaleRequirement = z.infer<typeof insertSaleRequirementSchema>;
 export type SaleCommission = typeof saleCommissions.$inferSelect;
