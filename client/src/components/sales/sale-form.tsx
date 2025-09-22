@@ -64,6 +64,7 @@ const serviceSchema = z.object({
 // Schema para um único voo
 const flightSchema = z.object({
   numeroVoo: z.string().min(1, "Número do voo é obrigatório"),
+  dataVoo: z.string().min(1, "Data do voo é obrigatória"),
   horarioEmbarque: z.string().min(1, "Horário de embarque é obrigatório"),
   horarioChegada: z.string().min(1, "Horário de chegada é obrigatório"),
   aeroportoOrigem: z.string().min(1, "Aeroporto de origem é obrigatório"),
@@ -239,6 +240,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     resolver: zodResolver(flightSchema),
     defaultValues: {
       numeroVoo: "",
+      dataVoo: "",
       horarioEmbarque: "",
       horarioChegada: "",
       aeroportoOrigem: "",
@@ -1872,7 +1874,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="text-sm font-medium mb-3">Adicionar Voo</h4>
                     <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           {/* Flight Number */}
                           <FormField
                             control={flightForm.control}
@@ -1884,6 +1886,25 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                                   <Input 
                                     placeholder="Ex: TAM 3054"
                                     data-testid="input-flight-number"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Flight Date */}
+                          <FormField
+                            control={flightForm.control}
+                            name="dataVoo"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Data do Voo *</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="date"
+                                    data-testid="input-flight-date"
                                     {...field}
                                   />
                                 </FormControl>
@@ -2034,7 +2055,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                           type="button"
                           onClick={() => {
                             const data = flightForm.getValues();
-                            if (data.numeroVoo && data.horarioEmbarque && data.horarioChegada && data.aeroportoOrigem && data.aeroportoDestino) {
+                            if (data.numeroVoo && data.dataVoo && data.horarioEmbarque && data.horarioChegada && data.aeroportoOrigem && data.aeroportoDestino) {
                               handleAddFlight(data);
                             } else {
                               toast({ 
@@ -2063,6 +2084,11 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                             <div className="flex-1">
                               <div className="flex items-center gap-4">
                                 <span className="font-medium">{flight.numeroVoo}</span>
+                                {flight.dataVoo && (
+                                  <span className="text-sm font-medium text-blue-600">
+                                    {new Date(flight.dataVoo).toLocaleDateString('pt-BR')}
+                                  </span>
+                                )}
                                 <span className="text-sm text-gray-600">
                                   {flight.aeroportoOrigem} → {flight.aeroportoDestino}
                                 </span>
