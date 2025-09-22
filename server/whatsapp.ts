@@ -16,8 +16,8 @@ const WHATSAPP_SERVICE_SECRET = process.env.WHATSAPP_SERVICE_SECRET;
 // =====================================================================
 // 🌟 WHATSAPP CLOUD API - CONFIGURAÇÕES OFICIAIS
 // =====================================================================
-const WHATSAPP_CLOUD_ACCESS_TOKEN = process.env.WHATSAPP_CLOUD_ACCESS_TOKEN;
-const WHATSAPP_CLOUD_PHONE_NUMBER_ID = process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID;
+const WHATSAPP_CLOUD_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
+const WHATSAPP_CLOUD_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
 const WHATSAPP_CLOUD_APP_SECRET = process.env.WHATSAPP_CLOUD_APP_SECRET;
 const WHATSAPP_WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
@@ -36,11 +36,11 @@ if (WHATSAPP_MODE === 'proxy') {
   }
 } else if (WHATSAPP_MODE === 'cloud') {
   if (!WHATSAPP_CLOUD_ACCESS_TOKEN) {
-    console.error('❌ ERRO: WHATSAPP_CLOUD_ACCESS_TOKEN é obrigatório para modo cloud');
+    console.error('❌ ERRO: WHATSAPP_ACCESS_TOKEN é obrigatório para modo cloud');
     process.exit(1);
   }
   if (!WHATSAPP_CLOUD_PHONE_NUMBER_ID) {
-    console.error('❌ ERRO: WHATSAPP_CLOUD_PHONE_NUMBER_ID é obrigatório para modo cloud');
+    console.error('❌ ERRO: WHATSAPP_PHONE_NUMBER_ID é obrigatório para modo cloud');
     process.exit(1);
   }
 }
@@ -472,6 +472,25 @@ class WhatsAppIntegration {
   // Atualizar modo
   setMode(newMode: 'proxy' | 'cloud'): void {
     this.mode = newMode;
+    
+    // Inicializar o cliente apropriado quando o modo muda
+    if (newMode === 'cloud') {
+      if (WHATSAPP_CLOUD_ACCESS_TOKEN && WHATSAPP_CLOUD_PHONE_NUMBER_ID) {
+        this.cloudClient = new WhatsAppCloudClient(
+          WHATSAPP_CLOUD_ACCESS_TOKEN,
+          WHATSAPP_CLOUD_PHONE_NUMBER_ID
+        );
+        this.status = 'Pronto - Cloud API Oficial';
+        console.log('✅ WhatsApp Cloud API inicializado dinamicamente');
+      } else {
+        console.error('❌ Erro: Credenciais da Cloud API não disponíveis');
+      }
+    } else {
+      this.proxyClient = new WhatsAppExternalClient(WHATSAPP_SERVICE_URL!, WHATSAPP_SERVICE_SECRET!);
+      this.status = 'Pronto - Servidor Externo';
+      console.log('✅ WhatsApp Client Proxy inicializado dinamicamente');
+    }
+    
     console.log(`🔄 Modo WhatsApp atualizado para: ${newMode}`);
   }
 }
