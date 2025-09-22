@@ -2151,7 +2151,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                     {selectedClient && (
                       (() => {
                         const contractantPassenger = {
-                          id: `client-${selectedClient.id}`,
+                          id: selectedClient.id,
                           nome: selectedClient.nome,
                           funcao: 'contratante'
                         };
