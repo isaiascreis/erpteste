@@ -21,8 +21,22 @@ const WHATSAPP_CLOUD_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
 const WHATSAPP_CLOUD_APP_SECRET = process.env.WHATSAPP_CLOUD_APP_SECRET;
 const WHATSAPP_WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
-// Feature Flag para migração gradual
-const WHATSAPP_MODE = process.env.WHATSAPP_MODE || 'cloud'; // 'proxy' ou 'cloud'
+// Auto-detectar modo baseado nas variáveis disponíveis
+let WHATSAPP_MODE: string;
+
+if (process.env.WHATSAPP_MODE) {
+  // Modo explicitamente definido
+  WHATSAPP_MODE = process.env.WHATSAPP_MODE;
+} else if (WHATSAPP_CLOUD_ACCESS_TOKEN && WHATSAPP_CLOUD_PHONE_NUMBER_ID) {
+  // Se temos credenciais Cloud, usar cloud
+  WHATSAPP_MODE = 'cloud';
+} else if (WHATSAPP_SERVICE_URL && WHATSAPP_SERVICE_SECRET) {
+  // Se temos credenciais Proxy, usar proxy
+  WHATSAPP_MODE = 'proxy';
+} else {
+  // Fallback para cloud como padrão
+  WHATSAPP_MODE = 'cloud';
+}
 
 // Validar configurações baseado no modo
 if (WHATSAPP_MODE === 'proxy') {
