@@ -619,7 +619,12 @@ export const insertSaleClientSchema = createInsertSchema(saleClients).omit({ id:
 export const insertServiceClientSchema = createInsertSchema(serviceClients).omit({ id: true, createdAt: true });
 export const insertSaleSellerSchema = createInsertSchema(saleSellers).omit({ id: true });
 export const insertBankAccountSchema = createInsertSchema(bankAccounts).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertPaymentMethodSchema = createInsertSchema(paymentMethods).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPaymentMethodSchema = createInsertSchema(paymentMethods).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  tipo: z.enum(["AGENCIA", "FORNECEDOR"]),
+  percentualTaxa: z.preprocess(v => typeof v === 'number' ? v.toString() : v, z.string().optional()),
+  diasCarencia: z.coerce.number().int().min(0).optional(),
+  ativo: z.boolean().default(true),
+});
 export const insertPaymentConditionSchema = createInsertSchema(paymentConditions).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAccountCategorySchema = createInsertSchema(accountCategories).omit({ id: true, createdAt: true });
 export const insertFinancialAccountSchema = createInsertSchema(financialAccounts).omit({ id: true, createdAt: true, updatedAt: true }).extend({

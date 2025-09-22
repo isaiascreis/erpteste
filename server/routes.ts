@@ -1206,6 +1206,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         stack: error.stack,
         name: error.name
       });
+      
+      // Handle Zod validation errors
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          message: "Dados inválidos",
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      
       res.status(500).json({ 
         message: "Failed to create payment method"
       });
