@@ -2370,19 +2370,48 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                 <FormField
                   control={paymentForm.control}
                   name="formaPagamento"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Forma de Pagamento</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="PIX, Cartão, Boleto, etc."
-                          data-testid="input-payment-method"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const receiverType = paymentForm.watch("quemRecebe");
+                    const availablePaymentMethods = receiverType === "AGENCIA" ? paymentMethodsAgencia : paymentMethodsFornecedor;
+                    const isLoadingMethods = !availablePaymentMethods;
+                    
+                    return (
+                      <FormItem>
+                        <FormLabel>Forma de Pagamento</FormLabel>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          defaultValue={field.value}
+                          disabled={isLoadingMethods || !receiverType}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-payment-method">
+                              <SelectValue placeholder={
+                                !receiverType 
+                                  ? "Selecione primeiro quem recebe"
+                                  : isLoadingMethods 
+                                    ? "Carregando formas de pagamento..." 
+                                    : "Selecione a forma de pagamento"
+                              } />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {!isLoadingMethods && availablePaymentMethods?.length === 0 ? (
+                              <SelectItem value="" disabled>
+                                Nenhuma forma de pagamento encontrada
+                              </SelectItem>
+                            ) : (
+                              availablePaymentMethods?.map((method: any) => (
+                                <SelectItem key={method.id} value={method.nome}>
+                                  {method.nome}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
               </div>
 
