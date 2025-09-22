@@ -2334,7 +2334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Verificar se as credenciais necessárias estão disponíveis
       if (mode === 'cloud') {
-        if (!process.env.WHATSAPP_CLOUD_ACCESS_TOKEN || !process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID) {
+        if (!process.env.WHATSAPP_ACCESS_TOKEN || !process.env.WHATSAPP_PHONE_NUMBER_ID) {
           return res.status(400).json({ 
             error: 'Credenciais da Cloud API não configuradas. Configure WHATSAPP_ACCESS_TOKEN e WHATSAPP_PHONE_NUMBER_ID.' 
           });
