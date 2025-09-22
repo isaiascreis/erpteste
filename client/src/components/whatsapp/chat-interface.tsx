@@ -179,8 +179,11 @@ export function ChatInterface() {
           name: data.name
         });
         
+        console.log("About to parse JSON response...");
         const conversation = await response.json();
-        console.log("Conversation created successfully:", conversation);
+        console.log("JSON parsed successfully:", conversation);
+        console.log("Conversation data type:", typeof conversation);
+        console.log("Conversation keys:", Object.keys(conversation || {}));
         
         return { conversation, messageData: data };
       } catch (error) {
