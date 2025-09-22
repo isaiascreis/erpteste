@@ -782,34 +782,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   private async recalculateSaleTotals(saleId: number, tx: any): Promise<void> {
-    const saleServices = await tx
-      .select({
-        valorVenda: services.valorVenda,
-        valorCusto: services.valorCusto,
-      })
-      .from(services)
-      .where(eq(services.vendaId, saleId));
+    try {
+      const saleServices = await tx
+        .select({
+          valorVenda: services.valorVenda,
+          valorCusto: services.valorCusto,
+        })
+        .from(services)
+        .where(eq(services.vendaId, saleId));
 
-    const totals = saleServices.reduce(
-      (acc: any, service: any) => {
-        acc.valorTotal += Number(service.valorVenda || 0);
-        acc.custoTotal += Number(service.valorCusto || 0);
-        return acc;
-      },
-      { valorTotal: 0, custoTotal: 0 }
-    );
+      const totals = saleServices.reduce(
+        (acc: any, service: any) => {
+          const venda = parseFloat(service.valorVenda?.toString() || '0') || 0;
+          const custo = parseFloat(service.valorCusto?.toString() || '0') || 0;
+          acc.valorTotal += venda;
+          acc.custoTotal += custo;
+          return acc;
+        },
+        { valorTotal: 0, custoTotal: 0 }
+      );
 
-    totals.lucro = totals.valorTotal - totals.custoTotal;
+      totals.lucro = totals.valorTotal - totals.custoTotal;
 
-    await tx
-      .update(sales)
-      .set({
-        valorTotal: totals.valorTotal.toString(),
-        custoTotal: totals.custoTotal.toString(),
-        lucro: totals.lucro.toString(),
-        updatedAt: new Date(),
-      })
-      .where(eq(sales.id, saleId));
+      // Ensure values are valid numbers and format them properly
+      const valorTotalStr = Math.max(0, totals.valorTotal).toFixed(2);
+      const custoTotalStr = Math.max(0, totals.custoTotal).toFixed(2);
+      const lucroStr = totals.lucro.toFixed(2);
+
+      await tx
+        .update(sales)
+        .set({
+          valorTotal: valorTotalStr,
+          custoTotal: custoTotalStr,
+          lucro: lucroStr,
+          updatedAt: new Date(),
+        })
+        .where(eq(sales.id, saleId));
+    } catch (error) {
+      console.error("Error recalculating sale totals:", error);
+      // Don't throw to prevent sale creation from failing
+    }
   }
 
   private async createFinancialAccountsForSale(saleId: number, tx: any): Promise<void> {

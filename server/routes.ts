@@ -382,17 +382,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sale = await storage.createSale(saleData);
       console.log("Sale created successfully:", sale.id);
       
+      // Skip automatic task generation temporarily to avoid production issues
       // Generate automatic tasks if sale is confirmed
-      if (sale.status === 'venda') {
-        try {
-          console.log("Generating automatic tasks...");
-          await storage.generateTasksFromTemplates(sale.id, sale);
-          console.log("Tasks generated successfully");
-        } catch (taskError) {
-          console.error("Error generating automatic tasks:", taskError);
-          // Don't fail the whole request if task generation fails
-        }
-      }
+      // if (sale.status === 'venda') {
+      //   try {
+      //     console.log("Generating automatic tasks...");
+      //     await storage.generateTasksFromTemplates(sale.id, sale);
+      //     console.log("Tasks generated successfully");
+      //   } catch (taskError) {
+      //     console.error("Error generating automatic tasks:", taskError);
+      //     // Don't fail the whole request if task generation fails
+      //   }
+      // }
       
       res.json(sale);
     } catch (error) {
