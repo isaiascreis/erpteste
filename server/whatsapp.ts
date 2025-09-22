@@ -22,7 +22,7 @@ const WHATSAPP_CLOUD_APP_SECRET = process.env.WHATSAPP_CLOUD_APP_SECRET;
 const WHATSAPP_WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
 // Feature Flag para migração gradual
-const WHATSAPP_MODE = process.env.WHATSAPP_MODE || 'proxy'; // 'proxy' ou 'cloud'
+const WHATSAPP_MODE = process.env.WHATSAPP_MODE || 'cloud'; // 'proxy' ou 'cloud'
 
 // Validar configurações baseado no modo
 if (WHATSAPP_MODE === 'proxy') {
