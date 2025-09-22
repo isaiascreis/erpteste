@@ -781,8 +781,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const parsed = insertSaleClientSchema.omit({ id: true, vendaId: true }).parse(req.body);
       const clientData = {
-        clienteId: parsed.clienteId || 0,
-        funcao: parsed.funcao || 'passageiro' as const,
+        clienteId: parsed.clienteId,
+        funcao: parsed.funcao,
         ...parsed
       };
       const saleClient = await storage.addSaleClient(vendaId, clientData);
@@ -840,7 +840,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsed = insertServiceClientSchema.omit({ id: true, servicoId: true }).parse(req.body);
       const clientData = {
         servicoId,
-        clienteId: parsed.clienteId || 0,
+        clienteId: parsed.clienteId,
         ...parsed
       };
       const serviceClient = await storage.upsertServiceClient(clientData);
@@ -1603,7 +1603,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Gerenciador de conexões de atendentes
   interface AttendantConnection {
-    ws: typeof WebSocket;
+    ws: WebSocket;
     userId: string;
     userRole: string;
     assignedConversations: Set<number>;
