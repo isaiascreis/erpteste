@@ -1122,19 +1122,45 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   {service.tipo === 'aereo' && service.detalhes && (
                     <div className="mt-3 p-3 bg-blue-50 rounded-md">
                       <h4 className="font-medium text-blue-800 mb-2">Detalhes do Voo</h4>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        {service.detalhes.numeroVoo && <p><strong>Voo:</strong> {service.detalhes.numeroVoo}</p>}
-                        {service.detalhes.companhiaAerea && <p><strong>Cia Aérea:</strong> {service.detalhes.companhiaAerea}</p>}
-                        {service.detalhes.origem && <p><strong>Origem:</strong> {service.detalhes.origem}</p>}
-                        {service.detalhes.destino && <p><strong>Destino:</strong> {service.detalhes.destino}</p>}
-                        {service.detalhes.dataVoo && <p><strong>Data:</strong> {service.detalhes.dataVoo}</p>}
-                        {service.detalhes.horarioSaida && <p><strong>Saída:</strong> {service.detalhes.horarioSaida}</p>}
-                        {service.detalhes.horarioChegada && <p><strong>Chegada:</strong> {service.detalhes.horarioChegada}</p>}
-                        {service.detalhes.direcao && <p><strong>Direção:</strong> {service.detalhes.direcao}</p>}
-                        {service.detalhes.classe && <p><strong>Classe:</strong> {service.detalhes.classe}</p>}
-                      </div>
-                      {service.detalhes.observacoes && (
-                        <p className="mt-2"><strong>Obs:</strong> {service.detalhes.observacoes}</p>
+                      {/* Multiple flights from OCR */}
+                      {service.detalhes.voos && Array.isArray(service.detalhes.voos) ? (
+                        <div className="space-y-3">
+                          {service.detalhes.voos.map((voo, index) => (
+                            <div key={index} className="border-l-4 border-blue-300 pl-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Plane className="h-4 w-4 text-blue-600" />
+                                <span className="font-medium text-blue-800">Voo {index + 1}</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                {voo.numeroVoo && <p><strong>Número:</strong> {voo.numeroVoo}</p>}
+                                {voo.companhiaAerea && <p><strong>Cia Aérea:</strong> {voo.companhiaAerea}</p>}
+                                {voo.aeroportoOrigem && <p><strong>Origem:</strong> {voo.aeroportoOrigem}</p>}
+                                {voo.aeroportoDestino && <p><strong>Destino:</strong> {voo.aeroportoDestino}</p>}
+                                {voo.dataVoo && <p><strong>Data:</strong> {voo.dataVoo}</p>}
+                                {voo.horarioEmbarque && <p><strong>Embarque:</strong> {voo.horarioEmbarque}</p>}
+                                {voo.horarioChegada && <p><strong>Chegada:</strong> {voo.horarioChegada}</p>}
+                                {voo.classe && <p><strong>Classe:</strong> {voo.classe}</p>}
+                                {voo.observacoes && <p className="col-span-2"><strong>Obs:</strong> {voo.observacoes}</p>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        /* Single flight (legacy format) */
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          {service.detalhes.numeroVoo && <p><strong>Voo:</strong> {service.detalhes.numeroVoo}</p>}
+                          {service.detalhes.companhiaAerea && <p><strong>Cia Aérea:</strong> {service.detalhes.companhiaAerea}</p>}
+                          {service.detalhes.origem && <p><strong>Origem:</strong> {service.detalhes.origem}</p>}
+                          {service.detalhes.destino && <p><strong>Destino:</strong> {service.detalhes.destino}</p>}
+                          {service.detalhes.dataVoo && <p><strong>Data:</strong> {service.detalhes.dataVoo}</p>}
+                          {service.detalhes.horarioSaida && <p><strong>Saída:</strong> {service.detalhes.horarioSaida}</p>}
+                          {service.detalhes.horarioChegada && <p><strong>Chegada:</strong> {service.detalhes.horarioChegada}</p>}
+                          {service.detalhes.direcao && <p><strong>Direção:</strong> {service.detalhes.direcao}</p>}
+                          {service.detalhes.classe && <p><strong>Classe:</strong> {service.detalhes.classe}</p>}
+                          {service.detalhes.observacoes && (
+                            <p className="mt-2"><strong>Obs:</strong> {service.detalhes.observacoes}</p>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
