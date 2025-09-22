@@ -3004,24 +3004,15 @@ function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
           const departureTime = `${depHour.padStart(2, '0')}:${depMin}`;
           const arrivalTime = `${arrHour.padStart(2, '0')}:${arrMin}`;
           
-          // Determine airline from flight number pattern
-          let airline = 'Azul'; // Default for numbered flights in this range
-          let airlineCode = '';
-          
-          // Pattern suggests Azul flights (3000-3999)
-          if (flightNumber.startsWith('3')) {
-            airline = 'Azul';
-            airlineCode = 'AD';
-          }
-
+          // Leave airline field empty for manual entry
           flights.push({
-            numeroVoo: `${airlineCode} ${flightNumber}`.trim(),
+            numeroVoo: flightNumber,
             dataVoo: flightDate,
             horarioEmbarque: departureTime,
             horarioChegada: arrivalTime,
             aeroportoOrigem: originAirport,
             aeroportoDestino: destAirport,
-            companhiaAerea: airline,
+            companhiaAerea: '', // Empty for manual entry
             confidence: 0.9
           });
         }
@@ -3142,7 +3133,6 @@ function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
         aeroportoDestino: flight.aeroportoDestino,
         horarioEmbarque: flight.horarioEmbarque,
         horarioChegada: flight.horarioChegada,
-        direcao: "ida" as const,
         classe: "",
         observacoes: "Importado via OCR"
       };
