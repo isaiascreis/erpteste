@@ -2209,11 +2209,15 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {Array.isArray(sellers) ? sellers.map((seller: any) => (
-                          <SelectItem key={seller.id} value={seller.id.toString()}>
-                            {seller.nome}
-                          </SelectItem>
-                        )) : null}
+                        {(() => {
+                          console.log("🔍 DEBUG: sellers data:", sellers);
+                          console.log("🔍 DEBUG: Array.isArray(sellers):", Array.isArray(sellers));
+                          return Array.isArray(sellers) ? sellers.map((seller: any) => (
+                            <SelectItem key={seller.id} value={seller.id.toString()}>
+                              {seller.nome}
+                            </SelectItem>
+                          )) : null;
+                        })()}
                       </SelectContent>
                     </Select>
                     <FormMessage />
