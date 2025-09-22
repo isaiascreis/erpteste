@@ -80,7 +80,7 @@ export default function Banking() {
   // Mutation to create bank account
   const createMutation = useMutation({
     mutationFn: async (data: BankAccountFormData) => {
-      await apiRequest("POST", "/api/bank-accounts", data);
+      await apiRequest("/api/bank-accounts", "POST", data);
     },
     onSuccess: () => {
       toast({ title: "Conta bancária criada com sucesso!" });
@@ -100,7 +100,7 @@ export default function Banking() {
   // Mutation to transfer between accounts
   const transferMutation = useMutation({
     mutationFn: async (data: TransferFormData) => {
-      return await apiRequest("POST", "/api/bank-accounts/transfer", data);
+      return await apiRequest("/api/bank-accounts/transfer", "POST", data);
     },
     onSuccess: (result, variables) => {
       toast({ title: "Transferência realizada com sucesso!" });

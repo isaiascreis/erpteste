@@ -315,7 +315,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest("POST", "/api/sales", data);
+      return await apiRequest("/api/sales", "POST", data);
     },
     onSuccess: async (newSale: any) => {
       // Create requirements for the new sale if any exist
@@ -324,7 +324,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
           for (const requirement of requirements) {
             // Remove the temporary ID and create requirement
             const { id, ...requirementData } = requirement;
-            await apiRequest("POST", `/api/sales/${newSale.id}/requirements`, requirementData);
+            await apiRequest(`/api/sales/${newSale.id}/requirements`, "POST", requirementData);
           }
         } catch (error) {
           console.error("Error creating requirements:", error);
@@ -362,7 +362,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
   const updateMutation = useMutation({
     mutationFn: async (data: any) => {
-      await apiRequest("PUT", `/api/sales/${sale?.id}`, data);
+      await apiRequest(`/api/sales/${sale?.id}`, "PUT", data);
     },
     onSuccess: () => {
       toast({ title: "Venda atualizada com sucesso!" });
@@ -393,7 +393,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   const createRequirementMutation = useMutation({
     mutationFn: async (data: any) => {
       if (!sale?.id) throw new Error("Sale ID required");
-      return await apiRequest("POST", `/api/sales/${sale.id}/requirements`, data);
+      return await apiRequest(`/api/sales/${sale.id}/requirements`, "POST", data);
     },
     onSuccess: () => {
       toast({ title: "Tarefa criada com sucesso!" });
@@ -410,7 +410,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
   const updateRequirementMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      return await apiRequest("PUT", `/api/requirements/${id}`, data);
+      return await apiRequest(`/api/requirements/${id}`, "PUT", data);
     },
     onSuccess: () => {
       toast({ title: "Tarefa atualizada com sucesso!" });
@@ -427,7 +427,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
   const completeRequirementMutation = useMutation({
     mutationFn: async (id: number) => {
-      return await apiRequest("PUT", `/api/requirements/${id}/complete`, {});
+      return await apiRequest(`/api/requirements/${id}/complete`, "PUT", {});
     },
     onSuccess: () => {
       toast({ title: "Tarefa marcada como concluída!" });
@@ -444,7 +444,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
   const deleteRequirementMutation = useMutation({
     mutationFn: async (id: number) => {
-      return await apiRequest("DELETE", `/api/requirements/${id}`);
+      return await apiRequest(`/api/requirements/${id}`, "DELETE");
     },
     onSuccess: () => {
       toast({ title: "Tarefa excluída com sucesso!" });
@@ -461,7 +461,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
   const confirmSaleMutation = useMutation({
     mutationFn: async (saleId: number) => {
-      await apiRequest("PUT", `/api/sales/${saleId}/status`, { status: "venda" });
+      await apiRequest(`/api/sales/${saleId}/status`, "PUT", { status: "venda" });
     },
     onSuccess: () => {
       toast({ title: "Venda confirmada com sucesso!" });
@@ -550,7 +550,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
   const createClientMutation = useMutation({
     mutationFn: async (data: z.infer<typeof clientSchema>) => {
-      return await apiRequest("POST", "/api/clients", data);
+      return await apiRequest("/api/clients", "POST", data);
     },
     onSuccess: (newClient: any) => {
       toast({ title: "Cliente criado com sucesso!" });

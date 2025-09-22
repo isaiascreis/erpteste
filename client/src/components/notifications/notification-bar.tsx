@@ -45,7 +45,7 @@ export function NotificationBar() {
 
   const markAsReadMutation = useMutation({
     mutationFn: async (notificationId: number) => {
-      return apiRequest("PUT", `/api/notifications/${notificationId}/read`);
+      return apiRequest(`/api/notifications/${notificationId}/read`, "PUT");
     },
     onSuccess: () => {
       // Invalidate and refetch notifications
