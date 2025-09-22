@@ -3064,7 +3064,24 @@ function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
           // Auto-accept after 2 seconds to show user what was extracted
           setTimeout(() => {
             console.log('Executando auto-aceitar dos voos...');
-            acceptAllFlights();
+            // Create the flight data directly here to avoid state issues
+            const validatedFlights: FlightFormData[] = extractedFlights.map(flight => ({
+              numeroVoo: flight.numeroVoo,
+              dataVoo: flight.dataVoo,
+              companhiaAerea: flight.companhiaAerea,
+              aeroportoOrigem: flight.aeroportoOrigem,
+              aeroportoDestino: flight.aeroportoDestino,
+              horarioEmbarque: flight.horarioEmbarque,
+              horarioChegada: flight.horarioChegada,
+              classe: "",
+              observacoes: "Importado via OCR"
+            }));
+            
+            console.log('Executando onFlightsExtracted com voos:', validatedFlights);
+            onFlightsExtracted(validatedFlights);
+            setShowReview(false);
+            setExtractedFlights([]);
+            setImagePreview(null);
           }, 2000);
           
           toast({
