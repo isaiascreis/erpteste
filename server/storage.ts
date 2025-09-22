@@ -662,7 +662,7 @@ export class DatabaseStorage implements IStorage {
       // Generate reference
       const referencia = `${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
 
-      // Create sale
+     // Create sale
       const [sale] = await tx
         .insert(sales)
         .values({
@@ -670,6 +670,10 @@ export class DatabaseStorage implements IStorage {
           clienteId: saleData.clienteId,
           status: saleData.status || 'orcamento',
           observacoes: saleData.observacoes,
+          // Adicione estas linhas para inicializar os valores
+          valorTotal: '0',
+          custoTotal: '0',
+          lucro: '0',
         })
         .returning();
 
