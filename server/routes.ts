@@ -963,12 +963,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/payment-methods', isAuthenticated, async (req, res) => {
     try {
+      console.log("DEBUG - Payment method request body:", JSON.stringify(req.body, null, 2));
       const paymentMethodData = insertPaymentMethodSchema.parse(req.body);
+      console.log("DEBUG - Parsed payment method data:", JSON.stringify(paymentMethodData, null, 2));
       const paymentMethod = await storage.createPaymentMethod(paymentMethodData);
       res.json(paymentMethod);
     } catch (error) {
       console.error("Error creating payment method:", error);
-      res.status(500).json({ message: "Failed to create payment method" });
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      res.status(500).json({ 
+        message: "Failed to create payment method"
+      });
     }
   });
 

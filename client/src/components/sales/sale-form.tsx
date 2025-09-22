@@ -1714,7 +1714,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
       {/* Service Modal */}
       <Dialog open={showServiceModal} onOpenChange={setShowServiceModal}>
-        <DialogContent className="max-w-4xl" data-testid="dialog-service">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-service">
           <DialogHeader>
             <DialogTitle>
               {editingItem ? "Editar Serviço" : "Adicionar Serviço"}
@@ -2547,6 +2547,96 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   data-testid="button-payment-save"
                 >
                   {editingItem ? "Atualizar" : "Adicionar"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Client Modal */}
+      <Dialog open={showClientModal} onOpenChange={setShowClientModal}>
+        <DialogContent className="max-w-md" data-testid="dialog-client">
+          <DialogHeader>
+            <DialogTitle>Novo Cliente</DialogTitle>
+            <DialogDescription>
+              Cadastre um novo cliente e adicione automaticamente como passageiro
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Form {...clientForm}>
+            <form onSubmit={clientForm.handleSubmit(handleCreateClient)} className="space-y-4">
+              <FormField
+                control={clientForm.control}
+                name="nome"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Nome completo" data-testid="input-client-name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={clientForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="email@exemplo.com" data-testid="input-client-email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={clientForm.control}
+                name="telefone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Telefone</FormLabel>
+                    <FormControl>
+                      <Input placeholder="(11) 99999-9999" data-testid="input-client-phone" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={clientForm.control}
+                name="cpf"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CPF</FormLabel>
+                    <FormControl>
+                      <Input placeholder="000.000.000-00" data-testid="input-client-cpf" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowClientModal(false)}
+                  data-testid="button-client-cancel"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit"
+                  data-testid="button-client-save"
+                  disabled={createClientMutation.isPending}
+                >
+                  {createClientMutation.isPending ? "Criando..." : "Criar Cliente"}
                 </Button>
               </div>
             </form>
