@@ -1879,8 +1879,13 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   {/* OCR Flight Import Section */}
                   <FlightOCRImport 
                     onFlightsExtracted={(extractedFlights) => {
+                      console.log('onFlightsExtracted callback executado com:', extractedFlights);
                       // Batch update to avoid race conditions
-                      setFlights(prev => [...prev, ...extractedFlights]);
+                      setFlights(prev => {
+                        const newFlights = [...prev, ...extractedFlights];
+                        console.log('Atualizando flights de', prev.length, 'para', newFlights.length, 'voos');
+                        return newFlights;
+                      });
                       toast({
                         title: "Voos importados",
                         description: `${extractedFlights.length} voos adicionados com sucesso!`
@@ -3055,8 +3060,10 @@ function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
         );
         
         if (allValid) {
+          console.log('Todos os voos são válidos, agendando auto-aceitar em 2 segundos...');
           // Auto-accept after 2 seconds to show user what was extracted
           setTimeout(() => {
+            console.log('Executando auto-aceitar dos voos...');
             acceptAllFlights();
           }, 2000);
           
@@ -3134,6 +3141,7 @@ function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
 
   // Accept all flights with validation
   const acceptAllFlights = () => {
+    console.log('acceptAllFlights chamado, extractedFlights:', extractedFlights);
     const validatedFlights: FlightFormData[] = [];
     
     for (const flight of extractedFlights) {
@@ -3181,6 +3189,7 @@ function FlightOCRImport({ onFlightsExtracted }: FlightOCRImportProps) {
       return;
     }
 
+    console.log('Chamando onFlightsExtracted com voos validados:', validatedFlights);
     onFlightsExtracted(validatedFlights);
     setShowReview(false);
     setExtractedFlights([]);
