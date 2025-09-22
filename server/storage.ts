@@ -24,6 +24,7 @@ import {
   notifications,
   documentTemplates,
   contractClauses,
+  taskTemplates,
   type User,
   type UpsertUser,
   type Client,
@@ -76,6 +77,8 @@ import {
   type InsertDocumentTemplate,
   type ContractClause,
   type InsertContractClause,
+  type TaskTemplate,
+  type InsertTaskTemplate,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ilike, and, gte, lte, sql, desc, asc, or } from "drizzle-orm";
@@ -179,6 +182,13 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   markNotificationAsRead(id: number, userId?: string): Promise<Notification>;
   deleteNotification(id: number): Promise<void>;
+
+  // Task Template operations - Templates para geração automática de tarefas
+  getTaskTemplates(ativo?: boolean): Promise<TaskTemplate[]>;
+  createTaskTemplate(template: InsertTaskTemplate): Promise<TaskTemplate>;
+  updateTaskTemplate(id: number, template: Partial<InsertTaskTemplate>): Promise<TaskTemplate>;
+  deleteTaskTemplate(id: number): Promise<void>;
+  generateTasksFromTemplates(saleId: number, sale: Sale): Promise<SaleRequirement[]>;
 
   // Payment methods operations  
   getPaymentMethods(tipo?: "AGENCIA" | "FORNECEDOR"): Promise<PaymentMethod[]>;
@@ -2274,6 +2284,115 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(documentTemplates)
       .where(eq(documentTemplates.id, id));
+  }
+
+  // Task Template operations - Templates para geração automática de tarefas
+  async getTaskTemplates(ativo?: boolean): Promise<TaskTemplate[]> {
+    let query = db.select().from(taskTemplates);
+    
+    if (ativo !== undefined) {
+      query = query.where(eq(taskTemplates.ativo, ativo));
+    }
+    
+    return await query.orderBy(asc(taskTemplates.nome));
+  }
+
+  async createTaskTemplate(template: InsertTaskTemplate): Promise<TaskTemplate> {
+    const [created] = await db
+      .insert(taskTemplates)
+      .values(template)
+      .returning();
+    return created;
+  }
+
+  async updateTaskTemplate(id: number, template: Partial<InsertTaskTemplate>): Promise<TaskTemplate> {
+    const [updated] = await db
+      .update(taskTemplates)
+      .set({
+        ...template,
+        updatedAt: new Date(),
+      })
+      .where(eq(taskTemplates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTaskTemplate(id: number): Promise<void> {
+    await db
+      .delete(taskTemplates)
+      .where(eq(taskTemplates.id, id));
+  }
+
+  // Generate tasks from templates based on sale data
+  async generateTasksFromTemplates(saleId: number, sale: Sale): Promise<SaleRequirement[]> {
+    // Get active task templates
+    const templates = await this.getTaskTemplates(true);
+    const generatedTasks: SaleRequirement[] = [];
+
+    for (const template of templates) {
+      try {
+        let dataVencimento: Date | null = null;
+
+        // Calculate due date based on template rule
+        if (template.regraTemporalizacao === 'antes_embarque') {
+          // Calculate based on first service date
+          const services = await db
+            .select()
+            .from(services)
+            .where(eq(services.vendaId, saleId))
+            .orderBy(asc(services.data));
+          
+          if (services.length > 0 && services[0].data) {
+            const embarqueDate = new Date(services[0].data);
+            dataVencimento = new Date(embarqueDate);
+            dataVencimento.setDate(dataVencimento.getDate() + template.diasOffset);
+          }
+        } else if (template.regraTemporalizacao === 'depois_viagem') {
+          // Calculate based on last service date
+          const services = await db
+            .select()
+            .from(services)
+            .where(eq(services.vendaId, saleId))
+            .orderBy(desc(services.data));
+          
+          if (services.length > 0 && services[0].data) {
+            const fimViagemDate = new Date(services[0].data);
+            dataVencimento = new Date(fimViagemDate);
+            dataVencimento.setDate(dataVencimento.getDate() + template.diasOffset);
+          }
+        } else if (template.regraTemporalizacao === 'data_fixa') {
+          // Use fixed date from template, or current date + offset as fallback
+          if (template.dataFixa) {
+            dataVencimento = new Date(template.dataFixa);
+          } else {
+            dataVencimento = new Date();
+            dataVencimento.setDate(dataVencimento.getDate() + template.diasOffset);
+          }
+        }
+
+        // Create task requirement
+        const taskData: InsertSaleRequirement = {
+          vendaId: saleId,
+          templateId: template.id,
+          tipo: template.tipo,
+          titulo: template.nome,
+          descricao: template.descricaoTemplate,
+          dataVencimento,
+          responsavelId: template.responsavelPadraoId,
+          prioridade: template.prioridadePadrao || 'normal',
+          observacoes: template.observacoesTemplate,
+          geradaAutomaticamente: true,
+          status: 'pendente',
+        };
+
+        const createdTask = await this.createSaleRequirement(taskData);
+        generatedTasks.push(createdTask);
+      } catch (error) {
+        console.error(`Erro ao gerar tarefa do template ${template.nome}:`, error);
+      }
+    }
+
+    return generatedTasks;
   }
 }
 

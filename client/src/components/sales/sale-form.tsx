@@ -116,26 +116,25 @@ const paymentPlanSchema = z.object({
   observacoes: z.string().optional(),
 });
 
-// Import requirement schema from shared types
+// Schema para requisitos/tarefas da venda
 const requirementSchema = z.object({
   tipo: z.enum(["checkin", "cartinha", "documentacao", "pagamento", "outros"]),
+  titulo: z.string().min(1, "Título é obrigatório"),
   descricao: z.string().min(1, "Descrição é obrigatória"),
   dataVencimento: z.string().optional(),
-  responsavelId: z.string().optional(),
-  status: z.enum(["pendente", "em_andamento", "concluida", "cancelada"]).default("pendente"),
   prioridade: z.enum(["baixa", "normal", "alta", "urgente"]).default("normal"),
   observacoes: z.string().optional(),
 });
 
 type PassengerFormData = z.infer<typeof passengerSchema>;
 type ServiceFormData = z.infer<typeof serviceSchema>;
+type RequirementFormData = z.infer<typeof requirementSchema>;
 type FlightFormData = z.infer<typeof flightSchema>;
 type FlightDetailsFormData = z.infer<typeof flightDetailsSchema>;
 type ServicePassengerFormData = z.infer<typeof servicePassengerSchema>;
 type HotelDetailsFormData = z.infer<typeof hotelDetailsSchema>;
 type SellerFormData = z.infer<typeof sellerSchema>;
 type PaymentPlanFormData = z.infer<typeof paymentPlanSchema>;
-type RequirementFormData = z.infer<typeof requirementSchema>;
 
 interface SaleFormProps {
   sale?: any;
@@ -291,10 +290,9 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     resolver: zodResolver(requirementSchema),
     defaultValues: { 
       tipo: "checkin", 
+      titulo: "",
       descricao: "", 
       dataVencimento: "", 
-      responsavelId: "", 
-      status: "pendente", 
       prioridade: "normal", 
       observacoes: "" 
     },
@@ -2538,17 +2536,171 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               {editingItem ? "Modifique as informações do requisito" : "Adicione um novo requisito à reserva"}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <p>Formulário de requisito será implementado em breve.</p>
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowRequirementModal(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={() => setShowRequirementModal(false)}>
-                Salvar
-              </Button>
-            </div>
-          </div>
+          <Form {...requirementForm}>
+            <form 
+              onSubmit={requirementForm.handleSubmit((data: RequirementFormData) => {
+                if (editingItem && editingItem.type === "requirement") {
+                  const updatedRequirements = requirements.map((req) =>
+                    req.id === editingItem.id ? { ...req, ...data } : req
+                  );
+                  setRequirements(updatedRequirements);
+                } else {
+                  const newRequirement = {
+                    id: `temp-${Date.now()}`,
+                    ...data
+                  };
+                  setRequirements([...requirements, newRequirement]);
+                }
+                requirementForm.reset();
+                setShowRequirementModal(false);
+                setEditingItem(null);
+              })}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={requirementForm.control}
+                  name="tipo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-requirement-type">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="checkin">Check-in</SelectItem>
+                          <SelectItem value="cartinha">Envio de Cartinha</SelectItem>
+                          <SelectItem value="documentacao">Documentação</SelectItem>
+                          <SelectItem value="pagamento">Pagamento</SelectItem>
+                          <SelectItem value="outros">Outros</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={requirementForm.control}
+                  name="prioridade"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Prioridade</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-requirement-priority">
+                            <SelectValue placeholder="Selecione a prioridade" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="baixa">Baixa</SelectItem>
+                          <SelectItem value="normal">Normal</SelectItem>
+                          <SelectItem value="alta">Alta</SelectItem>
+                          <SelectItem value="urgente">Urgente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={requirementForm.control}
+                name="titulo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Título</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Ex: Check-in Aeroporto São Paulo"
+                        data-testid="input-requirement-title"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={requirementForm.control}
+                name="descricao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Descrição</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Descreva detalhadamente o que precisa ser feito..."
+                        rows={3}
+                        data-testid="textarea-requirement-description"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={requirementForm.control}
+                name="dataVencimento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Data de Vencimento (Opcional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="date"
+                        data-testid="input-requirement-due-date"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={requirementForm.control}
+                name="observacoes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observações (Opcional)</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Observações adicionais..."
+                        rows={2}
+                        data-testid="textarea-requirement-notes"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Action buttons */}
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowRequirementModal(false)}
+                  data-testid="button-requirement-cancel"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit"
+                  data-testid="button-requirement-save"
+                >
+                  {editingItem ? "Atualizar" : "Adicionar"}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>

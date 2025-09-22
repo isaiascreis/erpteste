@@ -1,4 +1,4 @@
-import { sql, relations, eq } from "drizzle-orm";
+import { sql, relations, eq, isNotNull } from "drizzle-orm";
 import {
   boolean,
   decimal,
@@ -292,6 +292,7 @@ export const taskTemplates = pgTable("task_templates", {
   descricaoTemplate: text("descricao_template").notNull(),
   regraTemporalizacao: varchar("regra_temporalizacao", { length: 50 }).notNull(), // antes_embarque, depois_viagem, durante_viagem, data_fixa
   diasOffset: integer("dias_offset").notNull(), // Número de dias (positivo para depois, negativo para antes)
+  dataFixa: timestamp("data_fixa"), // Data fixa para tarefas com regra 'data_fixa'
   prioridadePadrao: varchar("prioridade_padrao", { length: 20 }).default("normal"), // baixa, normal, alta, urgente
   responsavelPadraoId: varchar("responsavel_padrao_id").references(() => users.id),
   ativo: boolean("ativo").default(true),
@@ -317,7 +318,10 @@ export const saleRequirements = pgTable("sale_requirements", {
   geradaAutomaticamente: boolean("gerada_automaticamente").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Unique constraint para evitar tarefas duplicadas baseadas no mesmo template
+  uniqueSaleTemplate: uniqueIndex("sale_requirements_venda_template_unique").on(table.vendaId, table.templateId).where(isNotNull(table.templateId)),
+}));
 
 // Sale Commissions - Controle detalhado de comissões
 export const saleCommissions = pgTable("sale_commissions", {
@@ -626,7 +630,9 @@ export const insertPaymentPlanSchema = createInsertSchema(paymentPlans).omit({ i
   dataPrevisaoPagamento: z.string().optional().transform(val => val ? new Date(val) : undefined),
   dataLiquidacao: z.string().optional().transform(val => val ? new Date(val) : undefined),
 });
-export const insertTaskTemplateSchema = createInsertSchema(taskTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTaskTemplateSchema = createInsertSchema(taskTemplates).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  dataFixa: z.string().optional().transform(val => val ? new Date(val) : undefined),
+});
 export const insertSaleRequirementSchema = createInsertSchema(saleRequirements).omit({ id: true, createdAt: true, updatedAt: true }).extend({
   dataVencimento: z.string().optional().transform(val => val ? new Date(val) : undefined),
   dataConclusao: z.string().optional().transform(val => val ? new Date(val) : undefined),

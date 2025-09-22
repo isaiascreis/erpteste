@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
-import { Settings as SettingsIcon, User, Building, Palette, Bell, Shield, LogOut, Users, Plus, Edit, Trash2, CreditCard, FileText } from "lucide-react";
+import { Settings as SettingsIcon, User, Building, Palette, Bell, Shield, LogOut, Users, Plus, Edit, Trash2, CreditCard, FileText, CheckSquare } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -16,7 +16,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { insertPaymentMethodSchema, insertPaymentConditionSchema, insertContractClauseSchema, insertDocumentTemplateSchema } from "@shared/schema";
+import { insertPaymentMethodSchema, insertPaymentConditionSchema, insertContractClauseSchema, insertDocumentTemplateSchema, insertTaskTemplateSchema } from "@shared/schema";
 
 export default function Settings() {
   // TEMPORARIAMENTE REMOVIDO - Sistema sem login
@@ -33,6 +33,8 @@ export default function Settings() {
   const [editingClause, setEditingClause] = useState<any>(null);
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
+  const [showTaskTemplateForm, setShowTaskTemplateForm] = useState(false);
+  const [editingTaskTemplate, setEditingTaskTemplate] = useState<any>(null);
   const { toast } = useToast();
   
   // Usuário fictício para exibição temporária
@@ -96,6 +98,17 @@ export default function Settings() {
     },
   });
 
+  // Fetch task templates
+  const { data: taskTemplates } = useQuery({
+    queryKey: ["/api/task-templates"],
+    enabled: activeSection === "tasks",
+    queryFn: async () => {
+      const res = await fetch('/api/task-templates', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch task templates');
+      return await res.json();
+    },
+  });
+
   // Forms for payment methods and conditions
   const paymentMethodForm = useForm({
     resolver: zodResolver(insertPaymentMethodSchema),
@@ -138,6 +151,21 @@ export default function Settings() {
       htmlContent: "",
       isActive: true,
     },
+  });
+
+  // Form for task templates
+  const taskTemplateForm = useForm({
+    resolver: zodResolver(insertTaskTemplateSchema),
+    defaultValues: {
+      nome: "",
+      tipo: "checkin",
+      descricaoTemplate: "",
+      regraTemporalizacao: "antes_embarque",
+      diasOffset: 0,
+      prioridadePadrao: "normal",
+      ativo: true,
+      observacoesTemplate: ""
+    }
   });
 
   // Mutations for payment methods
@@ -300,6 +328,46 @@ export default function Settings() {
     },
   });
 
+  // Mutations for task templates
+  const createTaskTemplateMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("/api/task-templates", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
+      setShowTaskTemplateForm(false);
+      setEditingTaskTemplate(null);
+      taskTemplateForm.reset();
+      toast({ title: "Template de tarefa criado com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao criar template de tarefa", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateTaskTemplateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest(`/api/task-templates/${id}`, "PUT", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
+      setShowTaskTemplateForm(false);
+      setEditingTaskTemplate(null);
+      taskTemplateForm.reset();
+      toast({ title: "Template de tarefa atualizado com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar template de tarefa", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteTaskTemplateMutation = useMutation({
+    mutationFn: (id: number) => apiRequest(`/api/task-templates/${id}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/task-templates"] });
+      toast({ title: "Template de tarefa excluído com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao excluir template de tarefa", description: error.message, variant: "destructive" });
+    },
+  });
+
   // Handlers
   const handlePaymentMethodSubmit = (data: any) => {
     if (editingPaymentMethod) {
@@ -349,6 +417,21 @@ export default function Settings() {
     } else {
       createTemplateMutation.mutate(data);
     }
+  };
+
+  // Handlers for task templates
+  const handleTaskTemplateSubmit = (data: any) => {
+    if (editingTaskTemplate) {
+      updateTaskTemplateMutation.mutate({ id: editingTaskTemplate.id, data });
+    } else {
+      createTaskTemplateMutation.mutate(data);
+    }
+  };
+
+  const handleEditTaskTemplate = (template: any) => {
+    setEditingTaskTemplate(template);
+    taskTemplateForm.reset(template);
+    setShowTaskTemplateForm(true);
   };
 
   const handleEditTemplate = (template: any) => {
@@ -439,6 +522,7 @@ export default function Settings() {
     { id: "payments", label: "Formas de Pagamento", icon: CreditCard },
     { id: "clauses", label: "Cláusulas", icon: FileText },
     { id: "templates", label: "Templates", icon: FileText },
+    { id: "tasks", label: "Tarefas Automáticas", icon: CheckSquare },
     { id: "appearance", label: "Aparência", icon: Palette },
     { id: "notifications", label: "Notificações", icon: Bell },
     { id: "security", label: "Segurança", icon: Shield },
@@ -959,6 +1043,94 @@ export default function Settings() {
                       )}
                     </div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeSection === "tasks" && (
+            <Card data-testid="card-tasks">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <CheckSquare className="w-5 h-5 mr-2" />
+                    Tarefas Automáticas
+                  </div>
+                  <Button
+                    onClick={() => setShowTaskTemplateForm(true)}
+                    size="sm"
+                    data-testid="button-add-task-template"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Novo Template
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Configure templates de tarefas que serão criadas automaticamente baseadas em regras de temporização.
+                </p>
+                <div className="space-y-4">
+                  {taskTemplates?.map((template: any) => (
+                    <div
+                      key={template.id}
+                      className="flex items-center justify-between p-4 border rounded-lg"
+                      data-testid={`task-template-${template.id}`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-medium" data-testid={`text-template-name-${template.id}`}>
+                            {template.nome}
+                          </h3>
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            template.ativo 
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                          }`}>
+                            {template.ativo ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {template.descricaoTemplate}
+                        </p>
+                        <div className="flex items-center space-x-4 mt-2 text-xs text-muted-foreground">
+                          <span>Tipo: {template.tipo}</span>
+                          <span>
+                            Regra: {template.regraTemporalizacao === 'antes_embarque' ? 'Antes do embarque' :
+                                   template.regraTemporalizacao === 'depois_viagem' ? 'Depois da viagem' :
+                                   template.regraTemporalizacao === 'data_fixa' ? 'Data fixa' : template.regraTemporalizacao}
+                          </span>
+                          <span>Offset: {template.diasOffset} dias</span>
+                          <span>Prioridade: {template.prioridadePadrao}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditTaskTemplate(template)}
+                          data-testid={`button-edit-task-template-${template.id}`}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteTaskTemplateMutation.mutate(template.id)}
+                          data-testid={`button-delete-task-template-${template.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {(!taskTemplates || taskTemplates.length === 0) && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <CheckSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                      <p>Nenhum template de tarefa configurado</p>
+                      <p className="text-sm">Crie templates para automatizar a criação de tarefas</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1719,6 +1891,243 @@ export default function Settings() {
                   data-testid="button-save-template"
                 >
                   {editingTemplate ? "Atualizar" : "Criar"} Template
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Task Template Modal */}
+      <Dialog open={showTaskTemplateForm} onOpenChange={setShowTaskTemplateForm}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-task-template">
+          <DialogHeader>
+            <DialogTitle>
+              {editingTaskTemplate ? "Editar Template de Tarefa" : "Novo Template de Tarefa"}
+            </DialogTitle>
+            <DialogDescription>
+              Configure um template para gerar tarefas automaticamente baseado em regras de temporização.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...taskTemplateForm}>
+            <form onSubmit={taskTemplateForm.handleSubmit(handleTaskTemplateSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={taskTemplateForm.control}
+                  name="nome"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome do Template</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Ex: Check-in Automático"
+                          data-testid="input-task-template-name"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={taskTemplateForm.control}
+                  name="tipo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-task-template-type">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="checkin">Check-in</SelectItem>
+                          <SelectItem value="cartinha">Envio de Cartinha</SelectItem>
+                          <SelectItem value="documentacao">Documentação</SelectItem>
+                          <SelectItem value="pagamento">Pagamento</SelectItem>
+                          <SelectItem value="outros">Outros</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={taskTemplateForm.control}
+                name="descricaoTemplate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Descrição do Template</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Descreva o que esta tarefa deve fazer..."
+                        rows={3}
+                        data-testid="textarea-task-template-description"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={taskTemplateForm.control}
+                  name="regraTemporalizacao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Regra de Temporização</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-task-template-timing">
+                            <SelectValue placeholder="Selecione a regra" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="antes_embarque">Antes do Embarque</SelectItem>
+                          <SelectItem value="depois_viagem">Depois da Viagem</SelectItem>
+                          <SelectItem value="data_fixa">Data Fixa</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={taskTemplateForm.control}
+                  name="diasOffset"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Dias de Offset</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number"
+                          placeholder="Ex: -3 (3 dias antes) ou 5 (5 dias depois)"
+                          data-testid="input-task-template-offset"
+                          {...field}
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Campo de data fixa - aparece apenas quando regra for data_fixa */}
+              {taskTemplateForm.watch("regraTemporalizacao") === "data_fixa" && (
+                <FormField
+                  control={taskTemplateForm.control}
+                  name="dataFixa"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data Fixa</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date"
+                          data-testid="input-task-template-fixed-date"
+                          {...field}
+                          value={field.value ? field.value.split('T')[0] : ''}
+                          onChange={(e) => field.onChange(e.target.value ? `${e.target.value}T00:00:00.000Z` : '')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={taskTemplateForm.control}
+                  name="prioridadePadrao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Prioridade Padrão</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-task-template-priority">
+                            <SelectValue placeholder="Selecione a prioridade" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="baixa">Baixa</SelectItem>
+                          <SelectItem value="normal">Normal</SelectItem>
+                          <SelectItem value="alta">Alta</SelectItem>
+                          <SelectItem value="urgente">Urgente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={taskTemplateForm.control}
+                  name="ativo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select onValueChange={(value) => field.onChange(value === "true")} value={field.value ? "true" : "false"}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-task-template-active">
+                            <SelectValue placeholder="Selecione o status" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="true">Ativo</SelectItem>
+                          <SelectItem value="false">Inativo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={taskTemplateForm.control}
+                name="observacoesTemplate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observações (Opcional)</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Observações adicionais para esta tarefa..."
+                        rows={2}
+                        data-testid="textarea-task-template-notes"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowTaskTemplateForm(false);
+                    setEditingTaskTemplate(null);
+                    taskTemplateForm.reset();
+                  }}
+                  data-testid="button-cancel-task-template"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit"
+                  data-testid="button-save-task-template"
+                >
+                  {editingTaskTemplate ? "Atualizar" : "Criar"} Template
                 </Button>
               </div>
             </form>
