@@ -3,8 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChatInterface } from "@/components/whatsapp/chat-interface";
-import { QrCode, MessageSquare, Settings } from "lucide-react";
+import { QrCode, MessageSquare, Settings, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 const WHATSAPP_SERVER_URL = ""; // Usar rotas locais do ERP integrado
 
@@ -326,16 +327,59 @@ export default function WhatsApp() {
                   <Settings className="w-5 h-5 text-blue-600" />
                   <h4 className="font-semibold text-blue-900 dark:text-blue-100">Modo de Conexão</h4>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant={whatsappMode === 'cloud' ? 'default' : 'secondary'}>
-                    {whatsappMode === 'cloud' ? '🌩️ Cloud API Oficial' : '🔗 Servidor Externo'}
-                  </Badge>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    {whatsappMode === 'cloud' 
-                      ? 'API oficial do Meta Business - Sem QR Code necessário'
-                      : 'Servidor proxy externo - Requer QR Code para autenticação'
-                    }
-                  </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Badge variant={whatsappMode === 'cloud' ? 'default' : 'secondary'}>
+                      {whatsappMode === 'cloud' ? '🌩️ Cloud API Oficial' : '🔗 Servidor Externo'}
+                    </Badge>
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      {whatsappMode === 'cloud' 
+                        ? 'API oficial do Meta Business - Sem QR Code necessário'
+                        : 'Servidor proxy externo - Requer QR Code para autenticação'
+                      }
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const newMode = whatsappMode === 'cloud' ? 'proxy' : 'cloud';
+                        const response = await apiRequest(`/api/whatsapp/switch-mode`, {
+                          method: 'POST',
+                          body: JSON.stringify({ mode: newMode }),
+                          headers: { 'Content-Type': 'application/json' }
+                        });
+                        
+                        if (response.ok) {
+                          setWhatsappMode(newMode);
+                          toast({
+                            title: "Modo alterado",
+                            description: `WhatsApp alterado para ${newMode === 'cloud' ? 'Cloud API Oficial' : 'Servidor Externo'}`,
+                          });
+                          // Recarregar status após mudança
+                          fetchWhatsAppStatus();
+                        } else {
+                          const error = await response.json();
+                          toast({
+                            title: "Erro ao alterar modo",
+                            description: error.error || "Erro desconhecido",
+                            variant: "destructive",
+                          });
+                        }
+                      } catch (error) {
+                        toast({
+                          title: "Erro",
+                          description: "Erro ao alterar modo do WhatsApp",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                    data-testid="button-switch-mode"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Alternar para {whatsappMode === 'cloud' ? 'Proxy' : 'Cloud API'}
+                  </Button>
                 </div>
               </div>
 

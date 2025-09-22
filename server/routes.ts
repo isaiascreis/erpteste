@@ -2317,5 +2317,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
+  // =====================================================================
+  // 🔄 ENDPOINT PARA ALTERNAR MODO WHATSAPP
+  // =====================================================================
+  
+  // Alternar entre proxy e cloud API
+  app.post('/api/whatsapp/switch-mode', async (req, res) => {
+    try {
+      const { mode } = req.body;
+      
+      if (mode !== 'proxy' && mode !== 'cloud') {
+        return res.status(400).json({ 
+          error: 'Modo inválido. Use "proxy" ou "cloud"' 
+        });
+      }
+
+      // Verificar se as credenciais necessárias estão disponíveis
+      if (mode === 'cloud') {
+        if (!process.env.WHATSAPP_CLOUD_ACCESS_TOKEN || !process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID) {
+          return res.status(400).json({ 
+            error: 'Credenciais da Cloud API não configuradas. Configure WHATSAPP_ACCESS_TOKEN e WHATSAPP_PHONE_NUMBER_ID.' 
+          });
+        }
+      }
+
+      // Alterar a variável de ambiente temporariamente (para esta sessão)
+      process.env.WHATSAPP_MODE = mode;
+      
+      console.log(`🔄 Modo WhatsApp alterado para: ${mode.toUpperCase()}`);
+      
+      res.json({ 
+        success: true, 
+        mode: mode,
+        message: `Modo alterado para ${mode === 'cloud' ? 'Cloud API Oficial' : 'Servidor Externo'}`,
+        restart_required: false // Mudança imediata sem reinicialização
+      });
+      
+    } catch (error) {
+      console.error('❌ Erro ao alternar modo WhatsApp:', error);
+      res.status(500).json({ error: 'Erro interno ao alternar modo' });
+    }
+  });
+
   return httpServer;
 }
