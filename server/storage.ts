@@ -544,87 +544,117 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSaleById(id: number): Promise<any> {
-    const [sale] = await db
-      .select({
-        id: sales.id,
-        referencia: sales.referencia,
-        status: sales.status,
-        valorTotal: sales.valorTotal,
-        custoTotal: sales.custoTotal,
-        lucro: sales.lucro,
-        observacoes: sales.observacoes,
-        dataVenda: sales.dataVenda,
-        createdAt: sales.createdAt,
-        client: {
-          id: clients.id,
-          nome: clients.nome,
-          email: clients.email,
-          telefone: clients.telefone,
-          cpf: clients.cpf,
-        },
-      })
-      .from(sales)
-      .leftJoin(clients, eq(sales.clienteId, clients.id))
-      .where(eq(sales.id, id));
+    try {
+      console.log(`🔍 Fetching sale with ID: ${id}`);
+      
+      // Get basic sale info with client
+      const [sale] = await db
+        .select({
+          id: sales.id,
+          referencia: sales.referencia,
+          status: sales.status,
+          valorTotal: sales.valorTotal,
+          custoTotal: sales.custoTotal,
+          lucro: sales.lucro,
+          observacoes: sales.observacoes,
+          dataVenda: sales.dataVenda,
+          createdAt: sales.createdAt,
+          clienteId: sales.clienteId,
+          client: {
+            id: clients.id,
+            nome: clients.nome,
+            email: clients.email,
+            telefone: clients.telefone,
+            cpf: clients.cpf,
+          },
+        })
+        .from(sales)
+        .leftJoin(clients, eq(sales.clienteId, clients.id))
+        .where(eq(sales.id, id));
 
-    if (!sale) return null;
+      if (!sale) {
+        console.log(`❌ Sale with ID ${id} not found`);
+        return null;
+      }
 
-    // Get passengers
-    const salePassengers = await db
-      .select()
-      .from(passengers)
-      .where(eq(passengers.vendaId, id))
-      .orderBy(asc(passengers.id));
+      console.log(`✅ Sale found: ${sale.referencia}, Status: ${sale.status}`);
 
-    // Get services with details
-    const saleServices = await db
-      .select({
-        id: services.id,
-        tipo: services.tipo,
-        descricao: services.descricao,
-        localizador: services.localizador,
-        valorVenda: services.valorVenda,
-        valorCusto: services.valorCusto,
-        detalhes: services.detalhes,
-        supplier: {
-          id: suppliers.id,
-          nome: suppliers.nome,
-        },
-      })
-      .from(services)
-      .leftJoin(suppliers, eq(services.fornecedorId, suppliers.id))
-      .where(eq(services.vendaId, id))
-      .orderBy(asc(services.id));
+      // Get passengers
+      console.log(`📝 Fetching passengers for sale ${id}`);
+      const salePassengers = await db
+        .select()
+        .from(passengers)
+        .where(eq(passengers.vendaId, id))
+        .orderBy(asc(passengers.id));
+      console.log(`✅ Found ${salePassengers.length} passengers`);
 
-    // Get sellers
-    const saleSellersData = await db
-      .select({
-        id: saleSellers.id,
-        comissaoPercentual: saleSellers.comissaoPercentual,
-        valorComissao: saleSellers.valorComissao,
-        seller: {
-          id: sellers.id,
-          nome: sellers.nome,
-        },
-      })
-      .from(saleSellers)
-      .leftJoin(sellers, eq(saleSellers.vendedorId, sellers.id))
-      .where(eq(saleSellers.vendaId, id));
+      // Get services with details
+      console.log(`🛫 Fetching services for sale ${id}`);
+      const saleServices = await db
+        .select({
+          id: services.id,
+          tipo: services.tipo,
+          descricao: services.descricao,
+          localizador: services.localizador,
+          valorVenda: services.valorVenda,
+          valorCusto: services.valorCusto,
+          detalhes: services.detalhes,
+          fornecedorId: services.fornecedorId,
+          dataInicio: services.dataInicio,
+          dataFim: services.dataFim,
+          supplier: {
+            id: suppliers.id,
+            nome: suppliers.nome,
+          },
+        })
+        .from(services)
+        .leftJoin(suppliers, eq(services.fornecedorId, suppliers.id))
+        .where(eq(services.vendaId, id))
+        .orderBy(asc(services.id));
+      console.log(`✅ Found ${saleServices.length} services`);
 
-    // Get payment plans
-    const salePaymentPlans = await db
-      .select()
-      .from(paymentPlans)
-      .where(eq(paymentPlans.vendaId, id))
-      .orderBy(asc(paymentPlans.dataVencimento));
+      // Get sellers
+      console.log(`👤 Fetching sellers for sale ${id}`);
+      const saleSellersData = await db
+        .select({
+          id: saleSellers.id,
+          vendedorId: saleSellers.vendedorId,
+          comissaoPercentual: saleSellers.comissaoPercentual,
+          valorComissao: saleSellers.valorComissao,
+          seller: {
+            id: sellers.id,
+            nome: sellers.nome,
+          },
+        })
+        .from(saleSellers)
+        .leftJoin(sellers, eq(saleSellers.vendedorId, sellers.id))
+        .where(eq(saleSellers.vendaId, id));
+      console.log(`✅ Found ${saleSellersData.length} sellers`);
 
-    return {
-      ...sale,
-      passengers: salePassengers,
-      services: saleServices,
-      sellers: saleSellersData,
-      paymentPlans: salePaymentPlans,
-    };
+      // Get payment plans
+      console.log(`💰 Fetching payment plans for sale ${id}`);
+      const salePaymentPlans = await db
+        .select()
+        .from(paymentPlans)
+        .where(eq(paymentPlans.vendaId, id))
+        .orderBy(asc(paymentPlans.dataVencimento));
+      console.log(`✅ Found ${salePaymentPlans.length} payment plans`);
+
+      const result = {
+        ...sale,
+        passengers: salePassengers,
+        services: saleServices,
+        sellers: saleSellersData,
+        paymentPlans: salePaymentPlans,
+      };
+
+      console.log(`🎯 Successfully assembled sale ${id} with all relations`);
+      return result;
+      
+    } catch (error) {
+      console.error(`❌ Error in getSaleById(${id}):`, error);
+      throw new Error(`Failed to fetch sale: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   async createSale(saleData: any): Promise<Sale> {

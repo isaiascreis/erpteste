@@ -304,19 +304,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get('/api/sales/:id', isAuthenticated, async (req, res) => {
+    const saleId = req.params.id;
     try {
-      const id = parseInt(req.params.id);
+      console.log(`🔗 GET /api/sales/${saleId} - User: ${req.user?.id}`);
+      
+      const id = parseInt(saleId);
       if (isNaN(id) || id <= 0) {
-        return res.status(400).json({ message: "Invalid sale ID" });
+        console.log(`❌ Invalid sale ID: ${saleId}`);
+        return res.status(400).json({ 
+          message: "ID de venda inválido",
+          error: "INVALID_ID" 
+        });
       }
+
+      console.log(`📊 Fetching sale details for ID: ${id}`);
       const sale = await storage.getSaleById(id);
+      
       if (!sale) {
-        return res.status(404).json({ message: "Sale not found" });
+        console.log(`❌ Sale not found: ${id}`);
+        return res.status(404).json({ 
+          message: "Venda não encontrada",
+          error: "SALE_NOT_FOUND" 
+        });
       }
+
+      console.log(`✅ Sale details fetched successfully: ${sale.referencia}`);
       res.json(sale);
+      
     } catch (error) {
-      console.error("Error fetching sale:", error);
-      res.status(500).json({ message: "Failed to fetch sale" });
+      console.error(`❌ Error fetching sale ${saleId}:`, error);
+      
+      // Check if it's a database connection error
+      if (error instanceof Error && error.message.includes('connection')) {
+        return res.status(503).json({ 
+          message: "Erro de conexão com banco de dados",
+          error: "DATABASE_CONNECTION_ERROR" 
+        });
+      }
+      
+      // Generic server error
+      res.status(500).json({ 
+        message: "Erro interno do servidor ao carregar detalhes da venda",
+        error: "INTERNAL_SERVER_ERROR",
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
