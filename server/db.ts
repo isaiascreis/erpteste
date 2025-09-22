@@ -14,11 +14,12 @@ if (!process.env.DATABASE_URL) {
 // Use Neon WebSocket for development (localhost/Replit) and regular pg for production
 const isProduction = process.env.NODE_ENV === 'production';
 const isRender = process.env.RENDER === 'true' || process.env.DATABASE_URL.includes('render.com');
+const isRailway = process.env.DATABASE_URL.includes('railway.net') || process.env.DATABASE_URL.includes('railway.app');
 
 let pool: any;
 let db: any;
 
-if (isProduction || isRender) {
+if (isProduction || isRender || isRailway) {
   // Production: Use regular PostgreSQL connection (for Render, Railway, etc.)
   console.log('Using PostgreSQL connection for production');
   pool = new PgPool({ connectionString: process.env.DATABASE_URL });
