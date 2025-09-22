@@ -779,7 +779,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "ID da venda inválido" });
       }
 
-      const parsed = insertSaleClientSchema.omit({ id: true, vendaId: true }).parse(req.body);
+      const parsed = insertSaleClientSchema.omit({ vendaId: true }).parse(req.body);
       const clientData = {
         vendaId,
         clienteId: parsed.clienteId,
@@ -837,7 +837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "ID do serviço inválido" });
       }
 
-      const parsed = insertServiceClientSchema.omit({ id: true, servicoId: true }).parse(req.body);
+      const parsed = insertServiceClientSchema.omit({ servicoId: true }).parse(req.body);
       const clientData = {
         servicoId,
         clienteId: parsed.clienteId
