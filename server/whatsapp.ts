@@ -13,7 +13,7 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { storage } from './storage';
@@ -61,6 +61,7 @@ class WhatsAppIntegration {
   private maxReconnectAttempts: number = 5;
   private connectionCount: number = 0;
   private lastActivity?: Date;
+  private isReauthing: boolean = false;
   constructor() {
     this.initializeClient();
   }
@@ -123,8 +124,14 @@ class WhatsAppIntegration {
 
       // Status da conexão
       if (connection === 'close') {
-        const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+        const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
         const errorMessage = lastDisconnect?.error?.message || '';
+        const reason = errorMessage.toLowerCase();
+        
+        // Verificar se precisa forçar reautenticação
+        const needsReauth = statusCode === DisconnectReason.loggedOut || 
+                           reason.includes('logged out') || 
+                           reason.includes('loggedout');
         
         // Detectar conflito de sessão (verifica tanto erro message quanto trace)
         const lastError = lastDisconnect?.error;
@@ -136,7 +143,6 @@ class WhatsAppIntegration {
         if (isConflict) {
           console.warn('⚠️ CONFLITO DE SESSÃO detectado! Outra instância WhatsApp está ativa.');
           this.clientStatus = 'CONFLITO: Feche WhatsApp Web/Mobile em outros dispositivos';
-          this.qrCodeDataUrl = '';
           
           // Para as tentativas de reconexão após 2 conflitos
           if (this.reconnectAttempts >= 2) {
@@ -148,16 +154,21 @@ class WhatsAppIntegration {
           }
         }
         
-        console.warn('⚠️ Conexão fechada. Reconectar?', shouldReconnect);
+        console.warn('⚠️ Conexão fechada. Forçar reauth?', needsReauth);
         if (!errorMessage.includes('conflict')) {
           this.clientStatus = 'Desconectado';
         }
-        this.qrCodeDataUrl = '';
-
-        if (shouldReconnect && !this.isReconnecting) {
-          // Delay maior para conflitos
+        
+        // Sempre tentar reconectar, mas forçar reauth se necessário
+        if (!this.isReconnecting) {
           const delay = errorMessage.includes('conflict') ? 30000 : 5000;
-          setTimeout(() => this.handleReconnect(), delay);
+          setTimeout(() => {
+            if (needsReauth) {
+              this.forceReauth();
+            } else {
+              this.handleReconnect();
+            }
+          }, delay);
         }
       } else if (connection === 'open') {
         console.log('✅ Cliente Baileys WhatsApp está pronto e conectado!');
@@ -377,10 +388,17 @@ class WhatsAppIntegration {
     return this.sock && this.clientStatus === 'Conectado';
   }
 
-  // Função para limpar sessão em caso de conflitos persistentes
-  public async clearSession(): Promise<void> {
+  // Função para forçar reautenticação removendo credenciais
+  public async forceReauth(): Promise<void> {
+    // Evitar concorrência
+    if (this.isReauthing) {
+      console.log('⚠️ Reautenticação já em andamento, ignorando...');
+      return;
+    }
+    
     try {
-      console.log('🧹 Limpando sessão WhatsApp devido a conflitos...');
+      this.isReauthing = true;
+      console.log('🔄 Forçando reautenticação WhatsApp...');
       
       // Terminar socket atual
       if (this.sock) {
@@ -390,22 +408,46 @@ class WhatsAppIntegration {
 
       // Limpar estados
       this.qrCodeDataUrl = '';
-      this.clientStatus = 'Reiniciando...';
+      this.clientStatus = 'Regenerando QR Code...';
       this.isReconnecting = false;
       this.reconnectAttempts = 0;
 
-      // Aguardar 5 segundos antes de reinicializar
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Remover todos os arquivos de sessão para forçar novo QR
+      const { readdirSync } = await import('fs');
+      try {
+        const files = readdirSync(SESSION_DIR);
+        for (const file of files) {
+          try {
+            const filePath = path.join(SESSION_DIR, file);
+            unlinkSync(filePath);
+            console.log(`🗑️ Removido: ${filePath}`);
+          } catch (err) {
+            console.warn(`⚠️ Não foi possível remover ${file}:`, err);
+          }
+        }
+      } catch (err) {
+        console.warn('⚠️ Não foi possível listar arquivos de sessão:', err);
+      }
+
+      // Aguardar 3 segundos antes de reinicializar
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
-      // Reinicializar cliente
+      // Reinicializar cliente para gerar novo QR
       await this.initializeClient();
       
-      console.log('✅ Sessão WhatsApp reinicializada');
+      console.log('✅ Reautenticação WhatsApp iniciada');
       
     } catch (error) {
-      console.error('❌ Erro ao limpar sessão:', error);
-      this.clientStatus = 'Erro ao reinicializar - Recarregue a página';
+      console.error('❌ Erro ao forçar reautenticação:', error);
+      this.clientStatus = 'Erro ao regenerar QR - Recarregue a página';
+    } finally {
+      this.isReauthing = false;
     }
+  }
+
+  // Função para limpar sessão em caso de conflitos persistentes
+  public async clearSession(): Promise<void> {
+    return this.forceReauth();
   }
 }
 

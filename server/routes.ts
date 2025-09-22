@@ -1368,19 +1368,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/whatsapp/qr', async (req, res) => {
     try {
       const qrCode = WhatsAppAPI.getQRCode();
+      const status = WhatsAppAPI.getStatus();
+      
       if (qrCode) {
-        res.json({ qrCode });
+        res.json({ qrCode, status: status.status });
       } else {
-        // Se não há QR code e está desconectado, tentar gerar um novo
-        const status = WhatsAppAPI.getStatus();
-        if (status.status === 'Desconectado') {
-          // Forçar reconexão para gerar novo QR code
+        // Se não há QR code, forçar nova inicialização
+        if (status.status === 'Desconectado' || status.status.includes('Erro')) {
+          // Forçar reautenticação para gerar novo QR code
           setTimeout(() => {
-            whatsappIntegration.clearSession();
-          }, 1000);
-          res.json({ message: 'Iniciando processo de reconexão...', needsReconnection: true });
+            whatsappIntegration.forceReauth();
+          }, 500);
+          res.json({ 
+            message: 'Gerando novo QR Code...', 
+            needsReconnection: true,
+            status: 'Regenerando QR Code...'
+          });
+        } else if (status.status === 'Conectando...' || status.status.includes('Regenerando')) {
+          // Cliente já está tentando conectar
+          res.json({ 
+            message: 'Aguarde, gerando QR Code...', 
+            needsReconnection: true,
+            status: status.status 
+          });
         } else {
-          res.status(404).json({ error: 'QR Code não disponível' });
+          res.json({ 
+            error: 'QR Code não disponível', 
+            status: status.status,
+            needsReconnection: false 
+          });
         }
       }
     } catch (error) {
@@ -1389,19 +1405,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // WhatsApp integrado - Reconectar / Limpar sessão
+  // WhatsApp integrado - Reconectar / Forçar nova autenticação
   app.post('/api/whatsapp/reconnect', async (req, res) => {
     try {
-      await whatsappIntegration.clearSession();
+      await whatsappIntegration.forceReauth();
       res.json({ 
         success: true,
-        message: 'Processo de reconexão iniciado. Aguarde alguns segundos para o novo QR Code.' 
+        message: 'Forçando nova autenticação. Aguarde alguns segundos para o novo QR Code.' 
       });
     } catch (error) {
       console.error("Error reconnecting WhatsApp:", error);
       res.status(500).json({ 
         success: false,
-        message: "Erro ao reconectar WhatsApp" 
+        message: "Erro ao forçar reconexão WhatsApp" 
       });
     }
   });
