@@ -641,12 +641,37 @@ export class DatabaseStorage implements IStorage {
         .orderBy(asc(paymentPlans.dataVencimento));
       console.log(`✅ Found ${salePaymentPlans.length} payment plans`);
 
+      // Get sale clients (linked clients) with simpler approach to avoid null object errors
+      console.log(`👥 Fetching sale clients for sale ${id}`);
+      const saleClientsData = await db
+        .select()
+        .from(saleClients)
+        .where(eq(saleClients.vendaId, id))
+        .orderBy(asc(saleClients.id));
+      
+      // Manually join client data for each saleClient to avoid complex select object errors
+      const saleClientsWithDetails = await Promise.all(
+        saleClientsData.map(async (saleClient) => {
+          const [clientData] = await db
+            .select()
+            .from(clients)
+            .where(eq(clients.id, saleClient.clienteId));
+          
+          return {
+            ...saleClient,
+            client: clientData || null,
+          };
+        })
+      );
+      console.log(`✅ Found ${saleClientsWithDetails.length} sale clients`);
+
       const result = {
         ...sale,
         passengers: salePassengers,
         services: saleServices,
         sellers: saleSellersData,
         paymentPlans: salePaymentPlans,
+        saleClients: saleClientsWithDetails,
       };
 
       console.log(`🎯 Successfully assembled sale ${id} with all relations`);
@@ -726,6 +751,22 @@ export class DatabaseStorage implements IStorage {
             valorComissao: seller.valorComissao?.toString() || '0',
           };
           await tx.insert(saleSellers).values(sellerData);
+        }
+      }
+
+      // Create sale clients (linked clients)
+      if (saleData.saleClients?.length) {
+        console.log(`👥 Creating ${saleData.saleClients.length} sale clients`);
+        for (const client of saleData.saleClients) {
+          if (client.clienteId && client.funcao) {
+            const clientData = {
+              vendaId: sale.id,
+              clienteId: client.clienteId,
+              funcao: client.funcao,
+            };
+            await tx.insert(saleClients).values(clientData);
+            console.log(`✅ Added client ${client.clienteId} as ${client.funcao} to sale ${sale.id}`);
+          }
         }
       }
 
@@ -813,6 +854,23 @@ export class DatabaseStorage implements IStorage {
             vendaId: id,
             ...plan,
           });
+        }
+      }
+
+      // Update sale clients (linked clients)
+      await tx.delete(saleClients).where(eq(saleClients.vendaId, id));
+      if (saleData.saleClients?.length) {
+        console.log(`👥 Updating ${saleData.saleClients.length} sale clients for sale ${id}`);
+        for (const client of saleData.saleClients) {
+          if (client.clienteId && client.funcao) {
+            const clientData = {
+              vendaId: id,
+              clienteId: client.clienteId,
+              funcao: client.funcao,
+            };
+            await tx.insert(saleClients).values(clientData);
+            console.log(`✅ Updated client ${client.clienteId} as ${client.funcao} for sale ${id}`);
+          }
         }
       }
 

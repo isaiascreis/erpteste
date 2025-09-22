@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,8 @@ const passengerSchema = z.object({
   dataNascimento: z.string().optional(),
   funcao: z.enum(["passageiro", "contratante"]).default("passageiro"),
   observacoes: z.string().optional(),
+  clienteId: z.number().optional(), // For linking to existing clients
+  isFromClients: z.boolean().optional(), // Flag to indicate this passenger is from clients
 });
 
 const clientSchema = z.object({
@@ -179,6 +181,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
 
   const { data: suppliers } = useQuery({
     queryKey: ["/api/suppliers"],
@@ -604,7 +607,25 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   useEffect(() => {
     if (sale) {
       setSelectedClient(sale.client);
-      setPassengers(sale.passengers || []);
+      
+      // Combine regular passengers with linked clients (saleClients)
+      const regularPassengers = sale.passengers || [];
+      const linkedClientPassengers = (sale.saleClients || []).map((saleClient: any) => ({
+        id: saleClient.id,
+        nome: saleClient.client?.nome || 'Cliente',
+        cpf: saleClient.client?.cpf || '',
+        dataNascimento: saleClient.client?.dataNascimento || '',
+        funcao: saleClient.funcao,
+        observacoes: `Cliente existente: ${saleClient.client?.nome || 'Cliente'}`,
+        // Critical fields for client linkage
+        clienteId: saleClient.clienteId,
+        isFromClients: true,
+      }));
+      
+      const combinedPassengers = [...regularPassengers, ...linkedClientPassengers];
+      console.log(`📊 Loading sale - Regular: ${regularPassengers.length}, Linked: ${linkedClientPassengers.length}, Total: ${combinedPassengers.length}`);
+      
+      setPassengers(combinedPassengers);
       setServices(sale.services || []);
       setSalesSellers(sale.sellers || []);
       setPaymentPlans(sale.paymentPlans || []);
@@ -621,10 +642,27 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     return () => subscription.unsubscribe();
   }, [paymentForm]);
 
-  const filteredClients = clients.filter(client =>
-    client.nome.toLowerCase().includes(searchClient.toLowerCase()) ||
-    (client.cpf && client.cpf.includes(searchClient))
-  );
+  const filteredClients = useMemo(() => {
+    if (!searchClient) return [];
+    
+    const searchLower = searchClient.toLowerCase();
+    // Normalize CPF for better matching (remove dots and dashes)
+    const normalizedSearchTerm = searchClient.replace(/[\.\-\s]/g, '');
+    
+    return clients.filter(client => {
+      // Search by name (case insensitive)
+      const nameMatch = client.nome.toLowerCase().includes(searchLower);
+      
+      // Search by email (case insensitive)
+      const emailMatch = client.email && client.email.toLowerCase().includes(searchLower);
+      
+      // Search by CPF (normalized - remove formatting)
+      const normalizedClientCpf = (client.cpf || '').replace(/[\.\-\s]/g, '');
+      const cpfMatch = normalizedClientCpf.includes(normalizedSearchTerm);
+      
+      return nameMatch || emailMatch || cpfMatch;
+    });
+  }, [clients, searchClient]);
 
   const totals = services.reduce(
     (acc, service) => {
@@ -772,11 +810,34 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   };
 
   const handleAddPassenger = (data: PassengerFormData) => {
-    if (editingItem) {
-      setPassengers(passengers.map(p => p.id === editingItem.id ? { ...editingItem, ...data } : p));
-    } else {
-      setPassengers([...passengers, { ...data, id: Date.now() }]);
+    // Create passenger object with proper client linkage
+    const passengerData = {
+      ...data,
+      id: editingItem?.id || Date.now(),
+      // Ensure client linkage fields are properly handled
+      clienteId: data.clienteId || undefined,
+      isFromClients: data.isFromClients || false,
+    };
+    
+    // Log for debugging client linkage
+    if (data.clienteId) {
+      console.log(`🔗 Passenger linked to client ${data.clienteId}: ${data.nome}`);
     }
+    
+    if (editingItem) {
+      setPassengers(passengers.map(p => p.id === editingItem.id ? passengerData : p));
+      toast({ 
+        title: "Passageiro atualizado", 
+        description: data.isFromClients ? "Cliente vinculado atualizado" : "Passageiro atualizado com sucesso" 
+      });
+    } else {
+      setPassengers([...passengers, passengerData]);
+      toast({ 
+        title: "Passageiro adicionado", 
+        description: data.isFromClients ? "Cliente vinculado como passageiro" : "Novo passageiro adicionado" 
+      });
+    }
+    
     setShowPassengerModal(false);
     setEditingItem(null);
     passengerForm.reset();
@@ -908,15 +969,23 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     }
 
     // Remove IDs temporários (gerados com Date.now()) antes de enviar para o backend
-    const cleanPassengers = passengers.map(({ id, ...passenger }) => passenger);
+    // Separate passengers from saleClients for proper backend handling
+    const regularPassengers = passengers.filter(p => !p.isFromClients).map(({ id, clienteId, isFromClients, ...passenger }) => passenger);
+    const linkedClients = passengers.filter(p => p.isFromClients && p.clienteId).map(p => ({
+      clienteId: p.clienteId,
+      funcao: p.funcao || 'passageiro'
+    }));
+    
     const cleanServices = services.map(({ id, ...service }) => service);
     const cleanSellers = salesSellers.map(({ id, ...seller }) => seller);
     const cleanPaymentPlans = paymentPlans.map(({ id, ...payment }) => payment);
-    const cleanRequirements = requirements.map(({ id, ...requirement }) => requirement);
+
+    console.log(`🔄 Sale submission - Regular passengers: ${regularPassengers.length}, Linked clients: ${linkedClients.length}`);
 
     const saleData = {
       clienteId: selectedClient.id,
-      passengers: cleanPassengers,
+      passengers: regularPassengers,
+      saleClients: linkedClients,
       services: cleanServices,
       sellers: cleanSellers,
       paymentPlans: cleanPaymentPlans,
@@ -1697,8 +1766,88 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
             </DialogDescription>
           </DialogHeader>
           
-          <Form {...passengerForm}>
-            <form onSubmit={passengerForm.handleSubmit(handleAddPassenger)} className="space-y-4">
+          {!editingItem ? (
+            <Tabs defaultValue="search-client" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="search-client" data-testid="tab-search-client">Buscar Cliente</TabsTrigger>
+                <TabsTrigger value="new-passenger" data-testid="tab-new-passenger">Novo Passageiro</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="search-client" className="space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">Buscar Cliente Existente</label>
+                    <Input
+                      placeholder="Digite o nome ou CPF do cliente..."
+                      value={searchClient}
+                      onChange={(e) => setSearchClient(e.target.value)}
+                      data-testid="input-client-search"
+                      className="mt-1"
+                    />
+                  </div>
+                  
+                  {searchClient && (
+                    <div className="max-h-48 overflow-y-auto border rounded-md">
+                      {filteredClients.length > 0 ? (
+                        <div className="p-2 space-y-1">
+                          {filteredClients.map((client) => (
+                            <div
+                              key={client.id}
+                              className="p-3 hover:bg-gray-50 cursor-pointer rounded border-b last:border-b-0"
+                              onClick={() => {
+                                // Auto-fill passenger form with client data AND link to existing client
+                                passengerForm.setValue("nome", client.nome);
+                                passengerForm.setValue("cpf", client.cpf || "");
+                                passengerForm.setValue("dataNascimento", client.dataNascimento || "");
+                                passengerForm.setValue("funcao", "passageiro");
+                                passengerForm.setValue("observacoes", `Cliente existente: ${client.nome}`);
+                                
+                                // CRITICAL: Set client linkage fields
+                                passengerForm.setValue("clienteId", client.id);
+                                passengerForm.setValue("isFromClients", true);
+                                
+                                // Clear search and show success
+                                setSearchClient("");
+                                toast({
+                                  title: "Cliente vinculado",
+                                  description: `${client.nome} foi vinculado como passageiro. Revise e confirme.`
+                                });
+                              }}
+                              data-testid={`client-option-${client.id}`}
+                            >
+                              <div className="font-medium">{client.nome}</div>
+                              {client.cpf && (
+                                <div className="text-sm text-gray-500">CPF: {client.cpf}</div>
+                              )}
+                              {client.email && (
+                                <div className="text-sm text-gray-500">Email: {client.email}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center text-gray-500">
+                          <User className="mx-auto h-8 w-8 text-gray-300 mb-2" />
+                          <p>Nenhum cliente encontrado</p>
+                          <p className="text-sm">Tente um termo de busca diferente</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {!searchClient && (
+                    <div className="text-center py-8 text-gray-500">
+                      <User className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                      <p>Digite o nome ou CPF para buscar clientes existentes</p>
+                      <p className="text-sm">Selecione um cliente para preencher automaticamente os dados</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="new-passenger">
+                <Form {...passengerForm}>
+                  <form onSubmit={passengerForm.handleSubmit(handleAddPassenger)} className="space-y-4">
               {/* Name */}
               <FormField
                 control={passengerForm.control}
@@ -1799,6 +1948,125 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               />
 
               {/* Action buttons */}
+                  <div className="flex justify-end space-x-2 pt-4">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => setShowPassengerModal(false)}
+                      data-testid="button-passenger-cancel"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button 
+                      type="submit"
+                      data-testid="button-passenger-save"
+                    >
+                      {editingItem ? "Atualizar" : "Adicionar"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </TabsContent>
+          </Tabs>
+        ) : (
+          // Edit mode - show form directly
+          <Form {...passengerForm}>
+            <form onSubmit={passengerForm.handleSubmit(handleAddPassenger)} className="space-y-4">
+              {/* Same form fields as in new-passenger tab */}
+              <FormField
+                control={passengerForm.control}
+                name="nome"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome Completo</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Digite o nome completo"
+                        data-testid="input-passenger-name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={passengerForm.control}
+                name="cpf"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CPF</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="000.000.000-00"
+                        data-testid="input-passenger-cpf"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={passengerForm.control}
+                name="dataNascimento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Data de Nascimento</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="date"
+                        data-testid="input-passenger-birthdate"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={passengerForm.control}
+                name="funcao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Função</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-passenger-role">
+                          <SelectValue placeholder="Selecione a função" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="passageiro">Passageiro</SelectItem>
+                        <SelectItem value="contratante">Contratante</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={passengerForm.control}
+                name="observacoes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observações</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Observações adicionais (opcional)"
+                        data-testid="textarea-passenger-notes"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <div className="flex justify-end space-x-2 pt-4">
                 <Button 
                   type="button" 
@@ -1817,6 +2085,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               </div>
             </form>
           </Form>
+        )}
         </DialogContent>
       </Dialog>
 
