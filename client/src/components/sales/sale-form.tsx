@@ -1578,21 +1578,6 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     </div>
   );
 }
-                {/* Step 3: Sellers */}
-                {step === 3 && renderVendedoresContent()}
-                
-                {/* Step 4: Payments */}
-                {step === 4 && renderPagamentosContent()}
-                
-                {/* Step 5: Requirements */}
-                {step === 5 && renderTarefasContent()}
-              </>
-            )}
-          </div>
-
-          {/* Summary Sidebar */}
-          <div className="space-y-6">
-            {/* Step Progress (only for create mode) */}
             {!isEditMode && (
               <Card data-testid="card-step-navigation">
                 <CardHeader>
@@ -1740,14 +1725,6 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     </div>
   );
 }
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 3: Sellers */}
-            {step === 3 && (
               <Card data-testid="card-sellers">
                 <CardHeader>
                   <div className="flex items-center justify-between">
