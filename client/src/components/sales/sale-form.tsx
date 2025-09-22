@@ -61,29 +61,28 @@ const serviceSchema = z.object({
   detalhes: z.any().optional(),
 });
 
-const flightDetailsSchema = z.object({
-  // Direção da viagem
-  direcao: z.enum(["ida", "volta", "ida-volta"]).optional(),
-  
-  // Voos de ida (ou único voo se for só ida/volta)
-  numeroVoo: z.string().optional(),
+// Schema para um único voo
+const flightSchema = z.object({
+  numeroVoo: z.string().min(1, "Número do voo é obrigatório"),
+  horarioEmbarque: z.string().min(1, "Horário de embarque é obrigatório"),
+  horarioChegada: z.string().min(1, "Horário de chegada é obrigatório"),
+  aeroportoOrigem: z.string().min(1, "Aeroporto de origem é obrigatório"),
+  aeroportoDestino: z.string().min(1, "Aeroporto de destino é obrigatório"),
   companhiaAerea: z.string().optional(),
-  origem: z.string().optional(),
-  destino: z.string().optional(),
-  dataVoo: z.string().optional(),
-  horarioPartida: z.string().optional(),
-  horarioChegada: z.string().optional(),
   classe: z.string().optional(),
   observacoes: z.string().optional(),
-  
-  // Voos de volta (apenas para ida-volta)
-  numeroVooVolta: z.string().optional(),
-  companhiaAereaVolta: z.string().optional(),
-  dataVooVolta: z.string().optional(),
-  horarioPartidaVolta: z.string().optional(),
-  horarioChegadaVolta: z.string().optional(),
-  classeVolta: z.string().optional(),
-  observacoesVolta: z.string().optional(),
+});
+
+// Schema para detalhes do serviço aéreo (múltiplos voos)
+const flightDetailsSchema = z.object({
+  voos: z.array(flightSchema).min(1, "Pelo menos um voo deve ser adicionado"),
+});
+
+// Schema para passageiros selecionados no serviço
+const servicePassengerSchema = z.object({
+  passageiroId: z.number(),
+  valorVenda: z.string().min(1, "Valor de venda é obrigatório"),
+  valorCusto: z.string().min(1, "Valor de custo é obrigatório"),
 });
 
 const hotelDetailsSchema = z.object({
@@ -130,7 +129,9 @@ const requirementSchema = z.object({
 
 type PassengerFormData = z.infer<typeof passengerSchema>;
 type ServiceFormData = z.infer<typeof serviceSchema>;
+type FlightFormData = z.infer<typeof flightSchema>;
 type FlightDetailsFormData = z.infer<typeof flightDetailsSchema>;
+type ServicePassengerFormData = z.infer<typeof servicePassengerSchema>;
 type HotelDetailsFormData = z.infer<typeof hotelDetailsSchema>;
 type SellerFormData = z.infer<typeof sellerSchema>;
 type PaymentPlanFormData = z.infer<typeof paymentPlanSchema>;
@@ -154,7 +155,6 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   const [salesSellers, setSalesSellers] = useState<any[]>([]);
   const [paymentPlans, setPaymentPlans] = useState<any[]>([]);
   const [requirements, setRequirements] = useState<any[]>([]);
-  const [servicePassengers, setServicePassengers] = useState<{[key: number]: {selected: boolean, valorCusto: string, valorVenda: string}}>({});
   const [showPassengerModal, setShowPassengerModal] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
   const [contractHtml, setContractHtml] = useState<string>("");
@@ -165,6 +165,11 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   const [editingItem, setEditingItem] = useState<any>(null);
   const [searchClient, setSearchClient] = useState("");
   const [showClientModal, setShowClientModal] = useState(false);
+  
+  // States for flight management
+  const [flights, setFlights] = useState<FlightFormData[]>([]);
+  const [selectedServicePassengers, setSelectedServicePassengers] = useState<ServicePassengerFormData[]>([]);
+  const [currentServiceType, setCurrentServiceType] = useState<string>("");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -230,17 +235,16 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     },
   });
 
-  const flightDetailsForm = useForm<FlightDetailsFormData>({
-    resolver: zodResolver(flightDetailsSchema),
+  // Form for individual flight details
+  const flightForm = useForm<FlightFormData>({
+    resolver: zodResolver(flightSchema),
     defaultValues: {
       numeroVoo: "",
-      companhiaAerea: "",
-      origem: "",
-      destino: "",
-      dataVoo: "",
-      horarioPartida: "",
+      horarioEmbarque: "",
       horarioChegada: "",
-      direcao: "ida",
+      aeroportoOrigem: "",
+      aeroportoDestino: "",
+      companhiaAerea: "",
       classe: "",
       observacoes: "",
     },
@@ -626,57 +630,67 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   );
   totals.lucro = totals.valorTotal - totals.custoTotal;
 
-  // Calculate totals for service passengers
-  const calculateServiceTotals = (passengers: {[key: number]: {selected: boolean, valorCusto: string, valorVenda: string}}) => {
-    return Object.values(passengers).reduce(
-      (acc, passenger) => {
-        if (passenger.selected) {
-          acc.valorCusto += Number(passenger.valorCusto || 0);
-          acc.valorVenda += Number(passenger.valorVenda || 0);
-        }
-        return acc;
-      },
-      { valorCusto: 0, valorVenda: 0 }
-    );
-  };
-
-  // Update service form totals when service passengers change
+  // Update service form totals when selected service passengers change
   const updateServiceTotals = () => {
-    const totals = calculateServiceTotals(servicePassengers);
-    serviceForm.setValue("valorCusto", totals.valorCusto.toFixed(2));
-    serviceForm.setValue("valorVenda", totals.valorVenda.toFixed(2));
+    const totals = selectedServicePassengers.reduce(
+      (acc, passenger) => ({
+        valorVenda: acc.valorVenda + parseFloat(passenger.valorVenda || "0"),
+        valorCusto: acc.valorCusto + parseFloat(passenger.valorCusto || "0")
+      }),
+      { valorVenda: 0, valorCusto: 0 }
+    );
+    
+    // Update form values with calculated totals
+    serviceForm.setValue('valorVenda', totals.valorVenda.toFixed(2));
+    serviceForm.setValue('valorCusto', totals.valorCusto.toFixed(2));
   };
 
-  // Handle passenger selection change
-  const handlePassengerSelectionChange = (passageiroId: number, checked: boolean) => {
-    setServicePassengers(prev => ({
-      ...prev,
-      [passageiroId]: {
-        ...prev[passageiroId],
-        selected: checked,
-        valorCusto: prev[passageiroId]?.valorCusto || "0",
-        valorVenda: prev[passageiroId]?.valorVenda || "0"
-      }
-    }));
-  };
-
-  // Handle passenger cost/sale value change
-  const handlePassengerValueChange = (passageiroId: number, field: 'valorCusto' | 'valorVenda', value: string) => {
-    setServicePassengers(prev => ({
-      ...prev,
-      [passageiroId]: {
-        ...prev[passageiroId],
-        selected: prev[passageiroId]?.selected || false,
-        valorCusto: field === 'valorCusto' ? value : (prev[passageiroId]?.valorCusto || "0"),
-        valorVenda: field === 'valorVenda' ? value : (prev[passageiroId]?.valorVenda || "0")
-      }
-    }));
-  };
-
-  // Update totals whenever servicePassengers changes
+  // Update totals whenever selectedServicePassengers changes
   useEffect(() => {
     updateServiceTotals();
-  }, [servicePassengers]);
+  }, [selectedServicePassengers]);
+
+  // Functions for managing flights
+  const handleAddFlight = (data: FlightFormData) => {
+    setFlights([...flights, { ...data }]);
+    flightForm.reset();
+    toast({ title: "Voo adicionado com sucesso!" });
+  };
+
+  const handleRemoveFlight = (index: number) => {
+    setFlights(flights.filter((_, i) => i !== index));
+    toast({ title: "Voo removido com sucesso!" });
+  };
+
+  // Function to handle passenger selection for services
+  const handleTogglePassengerSelection = (passengerId: number) => {
+    const existingIndex = selectedServicePassengers.findIndex(sp => sp.passageiroId === passengerId);
+    
+    if (existingIndex >= 0) {
+      // Remove passenger
+      setSelectedServicePassengers(selectedServicePassengers.filter((_, i) => i !== existingIndex));
+    } else {
+      // Add passenger with default values
+      setSelectedServicePassengers([
+        ...selectedServicePassengers,
+        {
+          passageiroId: passengerId,
+          valorVenda: "0",
+          valorCusto: "0"
+        }
+      ]);
+    }
+  };
+
+  const handleUpdatePassengerValue = (passengerId: number, field: 'valorVenda' | 'valorCusto', value: string) => {
+    setSelectedServicePassengers(prev => 
+      prev.map(sp => 
+        sp.passageiroId === passengerId 
+          ? { ...sp, [field]: value }
+          : sp
+      )
+    );
+  };
 
   const handleAddPassenger = (data: PassengerFormData) => {
     if (editingItem) {
@@ -690,12 +704,21 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
   };
 
   const handleAddService = (data: ServiceFormData) => {
+    // Validate flights for airline services
+    if (data.tipo === "aereo" && flights.length === 0) {
+      toast({ 
+        title: "Erro de validação",
+        description: "Adicione pelo menos um voo para serviços aéreos",
+        variant: "destructive"
+      });
+      return;
+    }
+
     let serviceData = { ...data };
     
     // Se for serviço aéreo, incluir detalhes do voo
     if (data.tipo === "aereo") {
-      const flightDetails = flightDetailsForm.getValues();
-      serviceData.detalhes = flightDetails;
+      serviceData.detalhes = { voos: flights };
     }
     
     // Se for serviço de hotel, incluir detalhes do hotel
@@ -705,13 +728,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     }
 
     // Include selected passengers and their values
-    (serviceData as any).servicePassengers = Object.entries(servicePassengers)
-      .filter(([_, data]) => data.selected)
-      .map(([passageiroId, data]) => ({
-        passageiroId: parseInt(passageiroId),
-        valorCusto: data.valorCusto,
-        valorVenda: data.valorVenda
-      }));
+    (serviceData as any).servicePassengers = selectedServicePassengers;
     
     if (editingItem) {
       setServices(services.map(s => s.id === editingItem.id ? { ...editingItem, ...serviceData } : s));
@@ -721,9 +738,10 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
     setShowServiceModal(false);
     setEditingItem(null);
     serviceForm.reset();
-    flightDetailsForm.reset();
+    flightForm.reset();
+    setFlights([]);
+    setSelectedServicePassengers([]);
     hotelDetailsForm.reset();
-    setServicePassengers({}); // Reset service passengers state
   };
 
   const handleAddSeller = (data: SellerFormData) => {
@@ -1841,6 +1859,302 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                   )}
                 />
               </div>
+
+              {/* Flight Details Section - Only for Aereo services */}
+              {serviceForm.watch("tipo") === "aereo" && (
+                <div className="space-y-4 border-t pt-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <Plane className="w-5 h-5" />
+                      Detalhes dos Voos
+                    </h3>
+                  </div>
+
+                  {/* Flight Form */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium mb-3">Adicionar Voo</h4>
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Flight Number */}
+                          <FormField
+                            control={flightForm.control}
+                            name="numeroVoo"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Número do Voo</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="Ex: TAM 3054"
+                                    data-testid="input-flight-number"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Company */}
+                          <FormField
+                            control={flightForm.control}
+                            name="companhiaAerea"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Companhia Aérea</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="Ex: TAM, GOL, Azul"
+                                    data-testid="input-airline"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Origin Airport */}
+                          <FormField
+                            control={flightForm.control}
+                            name="aeroportoOrigem"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Aeroporto de Origem</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="Ex: CGH, GRU, SDU"
+                                    data-testid="input-origin-airport"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Destination Airport */}
+                          <FormField
+                            control={flightForm.control}
+                            name="aeroportoDestino"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Aeroporto de Destino</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="Ex: CGH, GRU, SDU"
+                                    data-testid="input-destination-airport"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Departure Time */}
+                          <FormField
+                            control={flightForm.control}
+                            name="horarioEmbarque"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Horário de Embarque</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="time"
+                                    data-testid="input-departure-time"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Arrival Time */}
+                          <FormField
+                            control={flightForm.control}
+                            name="horarioChegada"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Horário de Chegada</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="time"
+                                    data-testid="input-arrival-time"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        {/* Class and Observations */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <FormField
+                            control={flightForm.control}
+                            name="classe"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Classe</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="Ex: Econômica, Executiva"
+                                    data-testid="input-flight-class"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                        </div>
+
+                        {/* Flight Observations */}
+                        <FormField
+                          control={flightForm.control}
+                          name="observacoes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Observações do Voo</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  placeholder="Observações adicionais sobre este voo"
+                                  data-testid="textarea-flight-notes"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      
+                      <div className="flex gap-2 mt-3">
+                        <Button 
+                          type="button"
+                          onClick={() => {
+                            const data = flightForm.getValues();
+                            if (data.numeroVoo && data.horarioEmbarque && data.horarioChegada && data.aeroportoOrigem && data.aeroportoDestino) {
+                              handleAddFlight(data);
+                            } else {
+                              toast({ 
+                                title: "Campos obrigatórios", 
+                                description: "Preencha todos os campos obrigatórios do voo",
+                                variant: "destructive" 
+                              });
+                            }
+                          }}
+                          data-testid="button-add-flight"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Adicionar Voo
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Flights List */}
+                  {flights.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Voos Adicionados ({flights.length})</h4>
+                      <div className="space-y-2">
+                        {flights.map((flight, index) => (
+                          <div key={index} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-4">
+                                <span className="font-medium">{flight.numeroVoo}</span>
+                                <span className="text-sm text-gray-600">
+                                  {flight.aeroportoOrigem} → {flight.aeroportoDestino}
+                                </span>
+                                <span className="text-sm text-gray-600">
+                                  {flight.horarioEmbarque} - {flight.horarioChegada}
+                                </span>
+                                {flight.companhiaAerea && (
+                                  <span className="text-sm text-gray-500">({flight.companhiaAerea})</span>
+                                )}
+                              </div>
+                              {flight.observacoes && (
+                                <p className="text-sm text-gray-500 mt-1">{flight.observacoes}</p>
+                              )}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRemoveFlight(index)}
+                              data-testid={`button-remove-flight-${index}`}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Passenger Selection Section - For all service types */}
+              {passengers.length > 0 && (
+                <div className="space-y-4 border-t pt-4">
+                  <h3 className="text-lg font-semibold">Selecionar Passageiros</h3>
+                  <p className="text-sm text-gray-600">
+                    Selecione os passageiros que utilizarão este serviço e defina os valores individuais
+                  </p>
+                  
+                  <div className="space-y-3">
+                    {passengers.map((passenger: any) => {
+                      const isSelected = selectedServicePassengers.some(sp => sp.passageiroId === passenger.id);
+                      const passengerData = selectedServicePassengers.find(sp => sp.passageiroId === passenger.id);
+                      
+                      return (
+                        <div key={passenger.id} className="border rounded-lg p-4">
+                          <div className="flex items-center space-x-3 mb-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleTogglePassengerSelection(passenger.id)}
+                              className="rounded"
+                              data-testid={`checkbox-passenger-${passenger.id}`}
+                            />
+                            <span className="font-medium">{passenger.nome}</span>
+                            <Badge variant="secondary">{passenger.funcao}</Badge>
+                          </div>
+                          
+                          {isSelected && (
+                            <div className="grid grid-cols-2 gap-3 ml-6">
+                              <div>
+                                <label className="text-sm font-medium">Valor de Venda (R$)</label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0,00"
+                                  value={passengerData?.valorVenda || "0"}
+                                  onChange={(e) => handleUpdatePassengerValue(passenger.id, 'valorVenda', e.target.value)}
+                                  data-testid={`input-passenger-sale-${passenger.id}`}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium">Valor de Custo (R$)</label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0,00"
+                                  value={passengerData?.valorCusto || "0"}
+                                  onChange={(e) => handleUpdatePassengerValue(passenger.id, 'valorCusto', e.target.value)}
+                                  data-testid={`input-passenger-cost-${passenger.id}`}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Action buttons */}
               <div className="flex justify-end space-x-2 pt-4">
