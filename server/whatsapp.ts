@@ -468,6 +468,12 @@ class WhatsAppIntegration {
   getMode(): string {
     return this.mode;
   }
+
+  // Atualizar modo
+  setMode(newMode: 'proxy' | 'cloud'): void {
+    this.mode = newMode;
+    console.log(`🔄 Modo WhatsApp atualizado para: ${newMode}`);
+  }
 }
 
 // =====================================================================
@@ -487,5 +493,6 @@ export const WhatsAppAPI = {
   forceReauth: () => whatsappIntegration.forceReauth(),
   isReady: () => whatsappIntegration.isReady(),
   getMode: () => whatsappIntegration.getMode(),
+  setMode: (newMode: 'proxy' | 'cloud') => whatsappIntegration.setMode(newMode),
   onMessageReceived: null as ((conversationId: number, message: any) => void) | null
 };

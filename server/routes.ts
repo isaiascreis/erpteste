@@ -2344,6 +2344,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Alterar a variável de ambiente temporariamente (para esta sessão)
       process.env.WHATSAPP_MODE = mode;
       
+      // Atualizar a instância do WhatsApp para usar o novo modo
+      WhatsAppAPI.setMode(mode);
+      
       console.log(`🔄 Modo WhatsApp alterado para: ${mode.toUpperCase()}`);
       
       res.json({ 
