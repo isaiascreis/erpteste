@@ -1324,6 +1324,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // WhatsApp API routes (authenticated)
   app.get('/api/whatsapp/conversations', isAuthenticated, async (req, res) => {
     try {
+      // Disable HTTP caching to prevent 304 responses
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      
       const conversations = await storage.getWhatsAppConversations();
       res.json(conversations);
     } catch (error) {
@@ -1360,6 +1367,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/whatsapp/conversations/:id/messages', isAuthenticated, async (req, res) => {
     try {
+      // Disable HTTP caching to prevent 304 responses
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      
       const conversationId = parseInt(req.params.id);
       const messages = await storage.getConversationMessages(conversationId);
       res.json(messages);
