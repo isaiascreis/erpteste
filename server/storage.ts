@@ -127,6 +127,14 @@ export interface IStorage {
   getFinancialAccounts(filters: { tipo?: string; status?: string; search?: string }): Promise<any[]>;
   createFinancialAccount(account: InsertFinancialAccount): Promise<FinancialAccount>;
   liquidateFinancialAccount(id: number, data: any): Promise<any>;
+  getFinancialSummary(filters?: { dateFrom?: string; dateTo?: string }): Promise<{
+    periodo: string;
+    receitas: Array<{ categoria: string; valor: number }>;
+    despesas: Array<{ categoria: string; valor: number }>;
+    totalReceitas: number;
+    totalDespesas: number;
+    lucroLiquido: number;
+  }>;
 
   // Banking operations
   getBankAccounts(): Promise<BankAccount[]>;
@@ -1008,6 +1016,88 @@ export class DatabaseStorage implements IStorage {
 
       return updatedAccount;
     });
+  }
+
+  async getFinancialSummary(filters?: { dateFrom?: string; dateTo?: string }): Promise<{
+    periodo: string;
+    receitas: Array<{ categoria: string; valor: number }>;
+    despesas: Array<{ categoria: string; valor: number }>;
+    totalReceitas: number;
+    totalDespesas: number;
+    lucroLiquido: number;
+  }> {
+    const conditions = [];
+    
+    // Apply date filters if provided
+    if (filters?.dateFrom) {
+      conditions.push(gte(financialAccounts.createdAt, new Date(filters.dateFrom)));
+    }
+    if (filters?.dateTo) {
+      conditions.push(lte(financialAccounts.createdAt, new Date(filters.dateTo)));
+    }
+
+    // Get all financial accounts with their categories
+    const accounts = await db
+      .select({
+        valor: financialAccounts.valorTotal,
+        tipo: financialAccounts.tipo,
+        categoria: {
+          id: accountCategories.id,
+          nome: accountCategories.nome,
+          tipo: accountCategories.tipo,
+        },
+      })
+      .from(financialAccounts)
+      .leftJoin(accountCategories, eq(financialAccounts.categoriaId, accountCategories.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    // Group and sum by category
+    const receitasMap = new Map<string, number>();
+    const despesasMap = new Map<string, number>();
+
+    for (const account of accounts) {
+      const valor = Number(account.valor);
+      const categoriaNome = account.categoria?.nome || 'Sem Categoria';
+      
+      if (account.tipo === 'receber' || account.categoria?.tipo === 'receita') {
+        // Sum revenues
+        receitasMap.set(categoriaNome, (receitasMap.get(categoriaNome) || 0) + valor);
+      } else if (account.tipo === 'pagar' || account.categoria?.tipo === 'despesa') {
+        // Sum expenses
+        despesasMap.set(categoriaNome, (despesasMap.get(categoriaNome) || 0) + valor);
+      }
+    }
+
+    // Convert maps to arrays
+    const receitas = Array.from(receitasMap.entries()).map(([categoria, valor]) => ({
+      categoria,
+      valor,
+    }));
+
+    const despesas = Array.from(despesasMap.entries()).map(([categoria, valor]) => ({
+      categoria,
+      valor,
+    }));
+
+    // Calculate totals
+    const totalReceitas = receitas.reduce((sum, item) => sum + item.valor, 0);
+    const totalDespesas = despesas.reduce((sum, item) => sum + item.valor, 0);
+    const lucroLiquido = totalReceitas - totalDespesas;
+
+    // Generate period description
+    const currentDate = new Date();
+    const periodo = filters?.dateFrom && filters?.dateTo
+      ? `${new Date(filters.dateFrom).toLocaleDateString('pt-BR')} - ${new Date(filters.dateTo).toLocaleDateString('pt-BR')}`
+      : `${currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+
+    return {
+      periodo,
+      receitas,
+      despesas,
+      totalReceitas,
+      totalDespesas,
+      lucroLiquido,
+    };
   }
 
   // Banking operations
@@ -2336,27 +2426,27 @@ export class DatabaseStorage implements IStorage {
         // Calculate due date based on template rule
         if (template.regraTemporalizacao === 'antes_embarque') {
           // Calculate based on first service date
-          const services = await db
+          const saleServices = await db
             .select()
             .from(services)
             .where(eq(services.vendaId, saleId))
             .orderBy(asc(services.data));
           
-          if (services.length > 0 && services[0].data) {
-            const embarqueDate = new Date(services[0].data);
+          if (saleServices.length > 0 && saleServices[0].data) {
+            const embarqueDate = new Date(saleServices[0].data);
             dataVencimento = new Date(embarqueDate);
             dataVencimento.setDate(dataVencimento.getDate() + template.diasOffset);
           }
         } else if (template.regraTemporalizacao === 'depois_viagem') {
           // Calculate based on last service date
-          const services = await db
+          const saleServices = await db
             .select()
             .from(services)
             .where(eq(services.vendaId, saleId))
             .orderBy(desc(services.data));
           
-          if (services.length > 0 && services[0].data) {
-            const fimViagemDate = new Date(services[0].data);
+          if (saleServices.length > 0 && saleServices[0].data) {
+            const fimViagemDate = new Date(saleServices[0].data);
             dataVencimento = new Date(fimViagemDate);
             dataVencimento.setDate(dataVencimento.getDate() + template.diasOffset);
           }

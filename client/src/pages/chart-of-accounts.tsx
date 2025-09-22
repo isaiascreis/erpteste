@@ -45,12 +45,12 @@ export default function ChartOfAccounts() {
     },
   });
 
-  const { data: financialSummary } = useQuery({
+  const { data: financialSummary, isLoading: isDRELoading } = useQuery({
     queryKey: ["/api/financial-summary"],
     queryFn: async () => {
       const response = await fetch("/api/financial-summary", { credentials: "include" });
       if (!response.ok) {
-        return null; // DRE endpoint might not exist yet
+        throw new Error("Failed to fetch financial summary");
       }
       return response.json();
     },
@@ -169,25 +169,19 @@ export default function ChartOfAccounts() {
     return variants[type as keyof typeof variants] || "outline" as const;
   };
 
-  // Mock DRE data for demonstration
-  const mockDRE = {
-    periodo: "Setembro 2025",
-    receitas: [
-      { categoria: "Vendas de Pacotes", valor: 125000 },
-      { categoria: "Comissões", valor: 8500 },
-      { categoria: "Outras Receitas", valor: 2100 }
-    ],
-    despesas: [
-      { categoria: "Fornecedores", valor: 85000 },
-      { categoria: "Salários", valor: 25000 },
-      { categoria: "Marketing", valor: 3500 },
-      { categoria: "Operacionais", valor: 7200 }
-    ]
+  // Use real DRE data from API or fallback to empty data
+  const dreData = financialSummary || {
+    periodo: "Dados não disponíveis",
+    receitas: [],
+    despesas: [],
+    totalReceitas: 0,
+    totalDespesas: 0,
+    lucroLiquido: 0
   };
 
-  const totalReceitas = mockDRE.receitas.reduce((sum, item) => sum + item.valor, 0);
-  const totalDespesas = mockDRE.despesas.reduce((sum, item) => sum + item.valor, 0);
-  const lucroLiquido = totalReceitas - totalDespesas;
+  const totalReceitas = dreData.totalReceitas;
+  const totalDespesas = dreData.totalDespesas;
+  const lucroLiquido = dreData.lucroLiquido;
 
   return (
     <div className="p-8" data-testid="chart-of-accounts-container">
@@ -303,7 +297,7 @@ export default function ChartOfAccounts() {
         <TabsContent value="dre" className="space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-semibold">DRE - {mockDRE.periodo}</h2>
+              <h2 className="text-xl font-semibold">DRE - {dreData.periodo}</h2>
               <p className="text-muted-foreground">Demonstração do Resultado do Exercício</p>
             </div>
           </div>
@@ -319,7 +313,14 @@ export default function ChartOfAccounts() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {mockDRE.receitas.map((item, index) => (
+                  {isDRELoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex justify-between items-center">
+                        <div className="h-4 bg-muted rounded animate-pulse w-24"></div>
+                        <div className="h-4 bg-muted rounded animate-pulse w-20"></div>
+                      </div>
+                    ))
+                  ) : dreData.receitas.map((item: any, index: number) => (
                     <div key={index} className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">{item.categoria}</span>
                       <span className="font-medium text-emerald-600">
@@ -349,7 +350,14 @@ export default function ChartOfAccounts() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {mockDRE.despesas.map((item, index) => (
+                  {isDRELoading ? (
+                    Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex justify-between items-center">
+                        <div className="h-4 bg-muted rounded animate-pulse w-24"></div>
+                        <div className="h-4 bg-muted rounded animate-pulse w-20"></div>
+                      </div>
+                    ))
+                  ) : dreData.despesas.map((item: any, index: number) => (
                     <div key={index} className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">{item.categoria}</span>
                       <span className="font-medium text-red-600">

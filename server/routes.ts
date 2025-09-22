@@ -1243,6 +1243,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Financial summary route (DRE)
+  app.get('/api/financial-summary', isAuthenticated, async (req, res) => {
+    try {
+      const { dateFrom, dateTo } = req.query;
+      const summary = await storage.getFinancialSummary({
+        dateFrom: dateFrom as string,
+        dateTo: dateTo as string,
+      });
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching financial summary:", error);
+      res.status(500).json({ message: "Failed to fetch financial summary" });
+    }
+  });
+
   // WhatsApp webhook for receiving messages (public endpoint with security)
   app.post('/api/whatsapp/webhook', async (req, res) => {
     try {
