@@ -14,7 +14,7 @@ if (!process.env.DATABASE_URL) {
 // Use Neon WebSocket for development (localhost/Replit) and regular pg for production
 const isProduction = process.env.NODE_ENV === 'production';
 const isRender = process.env.RENDER === 'true' || process.env.DATABASE_URL.includes('render.com');
-const isRailway = process.env.DATABASE_URL.includes('railway.net') || process.env.DATABASE_URL.includes('railway.app');
+const isRailway = process.env.DATABASE_URL.includes('railway.net') || process.env.DATABASE_URL.includes('railway.app') || process.env.DATABASE_URL.includes('rlwy.net');
 
 let pool: any;
 let db: any;
