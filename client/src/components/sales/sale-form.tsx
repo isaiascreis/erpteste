@@ -978,12 +978,7 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
           )}
 
           <Button
-            onClick={() => {
-              console.log("🔍 DEBUG: Botão Criar Novo Cliente clicado");
-              console.log("🔍 DEBUG: showClientModal antes:", showClientModal);
-              setShowClientModal(true);
-              console.log("🔍 DEBUG: setShowClientModal(true) executado");
-            }}
+            onClick={() => setShowClientModal(true)}
             variant="outline"
             className="w-full"
             data-testid="button-create-client"
@@ -2209,15 +2204,11 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {(() => {
-                          console.log("🔍 DEBUG: sellers data:", sellers);
-                          console.log("🔍 DEBUG: Array.isArray(sellers):", Array.isArray(sellers));
-                          return Array.isArray(sellers) ? sellers.map((seller: any) => (
-                            <SelectItem key={seller.id} value={seller.id.toString()}>
-                              {seller.nome}
-                            </SelectItem>
-                          )) : null;
-                        })()}
+                        {Array.isArray(sellers) ? sellers.map((seller: any) => (
+                          <SelectItem key={seller.id} value={seller.id.toString()}>
+                            {seller.nome}
+                          </SelectItem>
+                        )) : null}
                       </SelectContent>
                     </Select>
                     <FormMessage />

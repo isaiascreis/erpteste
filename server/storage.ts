@@ -181,6 +181,11 @@ export interface IStorage {
   updateSaleRequirement(id: number, requirement: Partial<InsertSaleRequirement>): Promise<SaleRequirement>;
   completeSaleRequirement(id: number): Promise<SaleRequirement>;
   deleteSaleRequirement(id: number): Promise<void>;
+  deleteSaleRequirements(saleId: number): Promise<void>;
+  deleteSaleServices(saleId: number): Promise<void>;
+  deleteSalePassengers(saleId: number): Promise<void>;
+  deleteSaleSellers(saleId: number): Promise<void>;
+  deleteSale(saleId: number): Promise<void>;
 
   // Sale commissions operations
   getSaleCommissions(saleId?: number, userId?: string): Promise<SaleCommission[]>;
@@ -1569,6 +1574,36 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(saleRequirements)
       .where(eq(saleRequirements.id, id));
+  }
+
+  async deleteSaleRequirements(saleId: number): Promise<void> {
+    await db
+      .delete(saleRequirements)
+      .where(eq(saleRequirements.vendaId, saleId));
+  }
+
+  async deleteSaleServices(saleId: number): Promise<void> {
+    await db
+      .delete(services)
+      .where(eq(services.vendaId, saleId));
+  }
+
+  async deleteSalePassengers(saleId: number): Promise<void> {
+    await db
+      .delete(passengers)
+      .where(eq(passengers.vendaId, saleId));
+  }
+
+  async deleteSaleSellers(saleId: number): Promise<void> {
+    await db
+      .delete(saleSellers)
+      .where(eq(saleSellers.vendaId, saleId));
+  }
+
+  async deleteSale(saleId: number): Promise<void> {
+    await db
+      .delete(sales)
+      .where(eq(sales.id, saleId));
   }
 
   // Sale commissions operations

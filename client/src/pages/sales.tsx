@@ -74,6 +74,44 @@ export default function Sales() {
     }
   };
 
+  const handleViewSale = async (sale: any) => {
+    handleEditSale(sale); // Para agora, usar a mesma lógica de edição
+  };
+
+  const handleDeleteSale = async (sale: any) => {
+    const confirmDelete = window.confirm(`Tem certeza que deseja excluir a venda ${sale.referencia}?`);
+    if (!confirmDelete) return;
+
+    try {
+      const response = await fetch(`/api/sales/${sale.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete sale');
+      }
+
+      toast({
+        title: "Venda excluída",
+        description: "A venda foi excluída com sucesso.",
+      });
+
+      // Refresh the sales list via query invalidation
+      // Note: In a proper implementation, we would use:
+      // queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
+      // For now, using reload as a simple solution
+      window.location.reload();
+    } catch (error) {
+      toast({
+        title: "Erro ao excluir venda",
+        description: "Não foi possível excluir a venda.",
+        variant: "destructive",
+      });
+      console.error('Error deleting sale:', error);
+    }
+  };
+
   const handleFormClose = () => {
     setShowForm(false);
     setSelectedSale(null);
@@ -220,7 +258,12 @@ export default function Sales() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
-                          <Button size="sm" variant="ghost" data-testid={`button-view-${sale.id}`}>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => handleViewSale(sale)}
+                            data-testid={`button-view-${sale.id}`}
+                          >
                             <Eye className="w-4 h-4" />
                           </Button>
                           <Button 
@@ -232,7 +275,12 @@ export default function Sales() {
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button size="sm" variant="ghost" data-testid={`button-delete-${sale.id}`}>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => handleDeleteSale(sale)}
+                            data-testid={`button-delete-${sale.id}`}
+                          >
                             <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
                         </div>

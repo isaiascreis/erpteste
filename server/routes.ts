@@ -320,6 +320,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete sale by ID
+  app.delete('/api/sales/:id', isAuthenticated, async (req, res) => {
+    try {
+      const saleId = parseInt(req.params.id);
+      if (isNaN(saleId) || saleId <= 0) {
+        return res.status(400).json({ message: "Invalid sale ID" });
+      }
+      
+      // First delete related records
+      await storage.deleteSaleServices(saleId);
+      await storage.deleteSalePassengers(saleId);
+      await storage.deleteSaleSellers(saleId);
+      await storage.deleteSaleRequirements(saleId);
+      
+      // Then delete the sale itself
+      await storage.deleteSale(saleId);
+      
+      res.json({ message: "Sale deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting sale:", error);
+      res.status(500).json({ message: "Failed to delete sale" });
+    }
+  });
+
   app.post('/api/sales', isAuthenticated, async (req, res) => {
     try {
       const saleData = req.body;
