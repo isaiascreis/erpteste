@@ -1,8 +1,10 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
+  console.log("Response status:", res.status, "OK:", res.ok);
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
+    console.error("Request failed:", res.status, text);
     throw new Error(`${res.status}: ${text}`);
   }
 }
@@ -12,6 +14,8 @@ export async function apiRequest(
   method: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  console.log("Making API request:", method, url, data);
+  
   const res = await fetch(url, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
@@ -19,7 +23,9 @@ export async function apiRequest(
     credentials: "include",
   });
 
+  console.log("Raw response received:", res.status, res.statusText);
   await throwIfResNotOk(res);
+  console.log("Response validation passed");
   return res;
 }
 
