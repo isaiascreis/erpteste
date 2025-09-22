@@ -1572,9 +1572,127 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               {editingItem ? "Modifique as informações do passageiro" : "Adicione um novo passageiro à reserva"}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <p>Modal content will be implemented here</p>
-          </div>
+          
+          <Form {...passengerForm}>
+            <form onSubmit={passengerForm.handleSubmit(handleAddPassenger)} className="space-y-4">
+              {/* Name */}
+              <FormField
+                control={passengerForm.control}
+                name="nome"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome Completo</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Digite o nome completo"
+                        data-testid="input-passenger-name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* CPF */}
+              <FormField
+                control={passengerForm.control}
+                name="cpf"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CPF</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="000.000.000-00"
+                        data-testid="input-passenger-cpf"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Birth Date */}
+              <FormField
+                control={passengerForm.control}
+                name="dataNascimento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Data de Nascimento</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="date"
+                        data-testid="input-passenger-birthdate"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Function/Role */}
+              <FormField
+                control={passengerForm.control}
+                name="funcao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Função</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-passenger-role">
+                          <SelectValue placeholder="Selecione a função" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="passageiro">Passageiro</SelectItem>
+                        <SelectItem value="contratante">Contratante</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Observations */}
+              <FormField
+                control={passengerForm.control}
+                name="observacoes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observações</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Observações adicionais (opcional)"
+                        data-testid="textarea-passenger-notes"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Action buttons */}
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowPassengerModal(false)}
+                  data-testid="button-passenger-cancel"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit"
+                  data-testid="button-passenger-save"
+                >
+                  {editingItem ? "Atualizar" : "Adicionar"}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
@@ -1589,17 +1707,160 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               {editingItem ? "Modifique as informações do serviço" : "Adicione um novo serviço à reserva"}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <p>Formulário de serviço será implementado em breve.</p>
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowServiceModal(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={() => setShowServiceModal(false)}>
-                Salvar
-              </Button>
-            </div>
-          </div>
+          
+          <Form {...serviceForm}>
+            <form onSubmit={serviceForm.handleSubmit(handleAddService)} className="space-y-4">
+              {/* Service Type */}
+              <FormField
+                control={serviceForm.control}
+                name="tipo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo de Serviço</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-service-type">
+                          <SelectValue placeholder="Selecione o tipo de serviço" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="aereo">Aéreo</SelectItem>
+                        <SelectItem value="hotel">Hotel</SelectItem>
+                        <SelectItem value="transfer">Transfer</SelectItem>
+                        <SelectItem value="outros">Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Description */}
+              <FormField
+                control={serviceForm.control}
+                name="descricao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Descrição</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Descreva o serviço..."
+                        data-testid="textarea-service-description"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Localizador */}
+              <FormField
+                control={serviceForm.control}
+                name="localizador"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Localizador</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Código localizador (opcional)"
+                        data-testid="input-service-localizador"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Supplier */}
+              <FormField
+                control={serviceForm.control}
+                name="fornecedorId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fornecedor</FormLabel>
+                    <Select onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)} defaultValue={field.value?.toString()}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-service-supplier">
+                          <SelectValue placeholder="Selecione um fornecedor (opcional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Array.isArray(suppliers) ? suppliers.map((supplier: any) => (
+                          <SelectItem key={supplier.id} value={supplier.id.toString()}>
+                            {supplier.nome}
+                          </SelectItem>
+                        )) : null}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Price fields */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={serviceForm.control}
+                  name="valorVenda"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Valor de Venda (R$)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0,00"
+                          data-testid="input-service-sale-price"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={serviceForm.control}
+                  name="valorCusto"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Valor de Custo (R$)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0,00"
+                          data-testid="input-service-cost-price"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowServiceModal(false)}
+                  data-testid="button-service-cancel"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit"
+                  data-testid="button-service-save"
+                >
+                  {editingItem ? "Atualizar" : "Adicionar"}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
@@ -1614,23 +1875,95 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               {editingItem ? "Modifique as informações do vendedor" : "Adicione um novo vendedor à reserva"}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <p>Formulário de vendedor será implementado em breve.</p>
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowSellerModal(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={() => setShowSellerModal(false)}>
-                Salvar
-              </Button>
-            </div>
-          </div>
+          
+          <Form {...sellerForm}>
+            <form onSubmit={sellerForm.handleSubmit(handleAddSeller)} className="space-y-4">
+              {/* Seller Selection */}
+              <FormField
+                control={sellerForm.control}
+                name="vendedorId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vendedor</FormLabel>
+                    <Select onValueChange={(value) => field.onChange(parseInt(value))} defaultValue={field.value?.toString()}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-seller">
+                          <SelectValue placeholder="Selecione um vendedor" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Array.isArray(sellers) ? sellers.map((seller: any) => (
+                          <SelectItem key={seller.id} value={seller.id.toString()}>
+                            {seller.nome}
+                          </SelectItem>
+                        )) : null}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Commission Percentage */}
+              <FormField
+                control={sellerForm.control}
+                name="comissaoPercentual"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Percentual de Comissão (%)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        placeholder="0,00"
+                        data-testid="input-commission-percentage"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Commission Value Display */}
+              {sellerForm.watch("comissaoPercentual") && totals.valorTotal > 0 && (
+                <div className="p-4 bg-muted rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    Valor da comissão calculado:
+                  </p>
+                  <p className="text-lg font-semibold text-emerald-600">
+                    R$ {((totals.valorTotal * Number(sellerForm.watch("comissaoPercentual") || 0)) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowSellerModal(false)}
+                  data-testid="button-seller-cancel"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit"
+                  data-testid="button-seller-save"
+                >
+                  {editingItem ? "Atualizar" : "Adicionar"}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
       {/* Payment Modal */}
       <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
-        <DialogContent className="max-w-2xl" data-testid="dialog-payment">
+        <DialogContent className="max-w-3xl" data-testid="dialog-payment">
           <DialogHeader>
             <DialogTitle>
               {editingItem ? "Editar Pagamento" : "Adicionar Pagamento"}
@@ -1639,17 +1972,244 @@ export function SaleForm({ sale, clients, onClose }: SaleFormProps) {
               {editingItem ? "Modifique as informações do pagamento" : "Adicione um novo pagamento à reserva"}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <p>Formulário de pagamento será implementado em breve.</p>
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowPaymentModal(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={() => setShowPaymentModal(false)}>
-                Salvar
-              </Button>
-            </div>
-          </div>
+          
+          <Form {...paymentForm}>
+            <form onSubmit={paymentForm.handleSubmit(handleAddPayment)} className="space-y-4">
+              {/* Description */}
+              <FormField
+                control={paymentForm.control}
+                name="descricao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Descrição</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Descrição do pagamento"
+                        data-testid="input-payment-description"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Amount and Due Date */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={paymentForm.control}
+                  name="valor"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Valor (R$)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0,00"
+                          data-testid="input-payment-amount"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={paymentForm.control}
+                  name="dataVencimento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data de Vencimento</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date"
+                          data-testid="input-payment-due-date"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Payment Preview Date and Payment Method */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={paymentForm.control}
+                  name="dataPrevisaoPagamento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data Prevista Pagamento</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date"
+                          data-testid="input-payment-preview-date"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={paymentForm.control}
+                  name="formaPagamento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Forma de Pagamento</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="PIX, Cartão, Boleto, etc."
+                          data-testid="input-payment-method"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Who Receives and Bank Account */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={paymentForm.control}
+                  name="quemRecebe"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Quem Recebe</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-payment-receiver">
+                            <SelectValue placeholder="Selecione quem recebe" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="AGENCIA">Agência</SelectItem>
+                          <SelectItem value="FORNECEDOR">Fornecedor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={paymentForm.control}
+                  name="contaBancariaId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Conta Bancária</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-payment-bank-account">
+                            <SelectValue placeholder="Selecione a conta (opcional)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {Array.isArray(bankAccounts) ? bankAccounts.map((account: any) => (
+                            <SelectItem key={account.id} value={account.id.toString()}>
+                              {account.banco} - {account.agencia} - {account.conta}
+                            </SelectItem>
+                          )) : null}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Client Payer and Amount Paid */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={paymentForm.control}
+                  name="clientePaganteId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cliente Pagante</FormLabel>
+                      <Select onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)} defaultValue={field.value?.toString()}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-payment-client">
+                            <SelectValue placeholder="Selecione o cliente (opcional)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {clients?.map((client: any) => (
+                            <SelectItem key={client.id} value={client.id.toString()}>
+                              {client.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={paymentForm.control}
+                  name="valorPago"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Valor Já Pago (R$)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number"
+                          step="0.01"
+                          placeholder="0,00"
+                          data-testid="input-payment-paid-amount"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Observations */}
+              <FormField
+                control={paymentForm.control}
+                name="observacoes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observações</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Observações adicionais (opcional)"
+                        data-testid="textarea-payment-notes"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Action buttons */}
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowPaymentModal(false)}
+                  data-testid="button-payment-cancel"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit"
+                  data-testid="button-payment-save"
+                >
+                  {editingItem ? "Atualizar" : "Adicionar"}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
