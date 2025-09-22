@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { setupSimpleAuth, isAuthenticated } from "./simpleAuth";
 import { insertClientSchema, insertSupplierSchema, insertSellerSchema, insertSaleSchema, insertServiceSchema, insertFinancialAccountSchema, insertBankAccountSchema, insertAccountCategorySchema, insertBankTransactionSchema, insertUserSchema, updateUserSchema, insertWhatsappConversationSchema, insertWhatsappMessageSchema, insertSaleRequirementSchema, insertSaleCommissionSchema, insertNotificationSchema, insertPaymentPlanSchema, insertPaymentMethodSchema, insertPaymentConditionSchema, insertServicePassengerSchema, insertSaleClientSchema, insertServiceClientSchema, insertContractClauseSchema, insertDocumentTemplateSchema, insertTaskTemplateSchema } from "@shared/schema";
 import { z } from "zod";
-import { WhatsAppAPI, whatsappIntegration } from "./whatsapp";
+import { WhatsAppAPI } from "./whatsapp";
 
 // Transfer validation schema
 const transferBankAccountSchema = z.object({
@@ -1420,7 +1420,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (status.status === 'Desconectado' || status.status.includes('Erro')) {
           // Forçar reautenticação para gerar novo QR code
           setTimeout(() => {
-            whatsappIntegration.forceReauth();
+            WhatsAppAPI.forceReauth();
           }, 500);
           res.json({ 
             message: 'Gerando novo QR Code...', 
