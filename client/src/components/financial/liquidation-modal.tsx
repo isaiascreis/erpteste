@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,11 +30,26 @@ export function LiquidationModal({
     contaBancariaId: "",
     dataLiquidacao: "",
     categoriaId: "",
+    formaPagamentoId: "",
     anexos: [] as string[],
   });
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch payment methods based on account type
+  const paymentMethodType = account?.tipo === 'pagar' ? 'FORNECEDOR' : 'AGENCIA';
+  const { data: paymentMethods = [], isLoading: isLoadingPaymentMethods } = useQuery({
+    queryKey: ["/api/payment-methods", paymentMethodType],
+    queryFn: async () => {
+      const response = await fetch(`/api/payment-methods?tipo=${paymentMethodType}`, { credentials: "include" });
+      if (!response.ok) {
+        throw new Error("Failed to fetch payment methods");
+      }
+      return response.json();
+    },
+    enabled: !!account,
+  });
 
   useEffect(() => {
     if (account) {
@@ -43,6 +58,7 @@ export function LiquidationModal({
         contaBancariaId: "",
         dataLiquidacao: new Date().toISOString().split('T')[0],
         categoriaId: "",
+        formaPagamentoId: "",
         anexos: [],
       });
     }
@@ -175,6 +191,36 @@ export function LiquidationModal({
                     {bankAccount.nome}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <Label htmlFor="formaPagamentoId">Forma de Pagamento</Label>
+            <Select 
+              value={formData.formaPagamentoId} 
+              onValueChange={(value) => handleInputChange("formaPagamentoId", value)}
+              disabled={isLoadingPaymentMethods}
+            >
+              <SelectTrigger data-testid="select-payment-method">
+                <SelectValue placeholder={
+                  isLoadingPaymentMethods 
+                    ? "Carregando formas de pagamento..." 
+                    : "Selecione a forma de pagamento..."
+                } />
+              </SelectTrigger>
+              <SelectContent>
+                {paymentMethods.length === 0 && !isLoadingPaymentMethods ? (
+                  <SelectItem value="" disabled>
+                    Nenhuma forma de pagamento encontrada
+                  </SelectItem>
+                ) : (
+                  paymentMethods.map((method: any) => (
+                    <SelectItem key={method.id} value={method.id.toString()}>
+                      {method.nome}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
